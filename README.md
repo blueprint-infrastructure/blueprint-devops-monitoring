@@ -27,8 +27,12 @@ monitoring/
 │   ├── node-down.md
 │   ├── disk-full.md
 │   └── high-cpu.md
-└── scripts/                 # Validation and utility scripts
-    └── validate.sh          # Local validation script
+└── scripts/                 # Validation and deployment scripts
+    ├── validate.sh          # Local validation script
+    ├── deploy.sh            # Master deployment script
+    ├── deploy-alerts-amp.sh # Deploy alerts to Amazon Managed Prometheus
+    ├── deploy-dashboards-amg.sh # Deploy dashboards to Amazon Managed Grafana
+    └── env.example          # Environment variable template
 ```
 
 ## Conventions
@@ -69,9 +73,81 @@ Ensure `promtool` is installed (part of Prometheus distribution) before running 
 - **Amazon Managed Grafana (AMG)**: Dashboards use standard Grafana JSON format
 - **Alertmanager**: Compatible with Alertmanager 0.24+ routing configuration
 
+## Deployment
+
+### Prerequisites
+
+- AWS CLI installed and configured
+- Appropriate IAM permissions for AMP and AMG
+- `promtool` (optional, for validation)
+
+### Quick Start
+
+1. **Configure environment variables:**
+   ```bash
+   cp scripts/env.example .env
+   # Edit .env with your workspace IDs and configuration
+   ```
+
+2. **Validate before deployment:**
+   ```bash
+   ./scripts/validate.sh
+   ```
+
+3. **Deploy everything:**
+   ```bash
+   ./scripts/deploy.sh
+   ```
+
+### Deployment Options
+
+**Deploy alerts only to AMP:**
+```bash
+AMP_WORKSPACE_ID=ws-xxx ./scripts/deploy-alerts-amp.sh
+```
+
+**Deploy dashboards only to AMG:**
+```bash
+AMG_WORKSPACE_ID=g-xxx ./scripts/deploy-dashboards-amg.sh
+```
+
+**Deploy with custom options:**
+```bash
+AMP_WORKSPACE_ID=ws-xxx \
+AMG_WORKSPACE_ID=g-xxx \
+AMP_REGION=us-west-2 \
+./scripts/deploy.sh --alerts-only
+```
+
+### Environment Variables
+
+See `scripts/env.example` for all available configuration options:
+
+- `AMP_WORKSPACE_ID` - Amazon Managed Prometheus workspace ID (required)
+- `AMP_REGION` - AWS region for AMP (default: us-east-1)
+- `AMP_RULE_NAMESPACE` - Rule namespace in AMP (default: default)
+- `AMG_WORKSPACE_ID` - Amazon Managed Grafana workspace ID (required)
+- `AMG_REGION` - AWS region for AMG (default: us-east-1)
+- `AMG_API_KEY` - Grafana API key (optional, script can create one)
+- `AMG_ENDPOINT` - Grafana endpoint (optional, auto-detected)
+- `OVERWRITE` - Overwrite existing dashboards (default: true)
+
+### IAM Permissions
+
+The deployment scripts require the following IAM permissions:
+
+**For AMP:**
+- `aps:PutRuleGroupsNamespace`
+- `aps:DescribeWorkspace`
+
+**For AMG:**
+- `grafana:CreateWorkspaceApiKey` (if auto-creating API keys)
+- `grafana:DescribeWorkspace`
+- Grafana API permissions for dashboard creation/update
+
 ## Getting Started
 
 1. Review alert rules in `alerting/` directory
 2. Customize Alertmanager routing in `alertmanager/alertmanager.yaml` with your receiver configurations
-3. Import dashboards from `dashboards/` into your Grafana instance
+3. Deploy alerts and dashboards using the deployment scripts
 4. Update runbooks in `runbooks/` with environment-specific procedures
