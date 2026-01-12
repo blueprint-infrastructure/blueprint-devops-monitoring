@@ -1,0 +1,42 @@
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Local environment files
+.env
+.env.local
+*.local
+secrets.yaml
+secrets.yml
+*secret*
+*key*
+
+# Generated artifacts
+*.tmp
+*.log
+*.cache
+dist/
+build/
+*.pyc
+__pycache__/
+
+# Temporary files
+*.bak
+*.backup
+*.orig

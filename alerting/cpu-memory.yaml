@@ -1,0 +1,51 @@
+groups:
+  - name: cpu_memory
+    interval: 30s
+    rules:
+      - alert: HighCPU
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 85% ({{ $value | humanizePercentage }}) on {{ $labels.instance }} for more than 10 minutes"
+          runbook_url: "https://runbooks.example.com/high-cpu"
+
+      - alert: HighCPUCritical
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 95% ({{ $value | humanizePercentage }}) on {{ $labels.instance }} for more than 5 minutes"
+          runbook_url: "https://runbooks.example.com/high-cpu"
+
+      - alert: MemoryPressure
+        expr: |
+          (
+            (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+          ) < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory pressure on {{ $labels.instance }}"
+          description: "Available memory is below 15% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }} for more than 10 minutes"
+          runbook_url: "https://runbooks.example.com/high-cpu"
+
+      - alert: MemoryPressureCritical
+        expr: |
+          (
+            (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+          ) < 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory pressure on {{ $labels.instance }}"
+          description: "Available memory is below 5% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }} for more than 5 minutes"
+          runbook_url: "https://runbooks.example.com/high-cpu"

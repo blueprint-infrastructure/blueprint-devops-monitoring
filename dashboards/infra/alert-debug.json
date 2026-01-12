@@ -1,0 +1,142 @@
+{
+  "title": "Alert Debug",
+  "tags": ["alerts", "debug"],
+  "timezone": "browser",
+  "schemaVersion": 27,
+  "version": 1,
+  "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Firing Alerts",
+        "type": "table",
+        "gridPos": {
+          "h": 10,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "ALERTS{alertstate=\"firing\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true,
+                "__name__": false
+              },
+              "indexByName": {},
+              "renameByName": {
+                "Time": "",
+                "Value": "Firing",
+                "__name__": "Alert Name",
+                "alertname": "Alert Name",
+                "instance": "Instance",
+                "job": "Job",
+                "severity": "Severity"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Severity"
+              },
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-background"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "value": null,
+                        "color": "green"
+                      },
+                      {
+                        "value": 0,
+                        "color": "yellow"
+                      },
+                      {
+                        "value": 1,
+                        "color": "red"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "critical": {
+                          "text": "Critical",
+                          "color": "red"
+                        },
+                        "warning": {
+                          "text": "Warning",
+                          "color": "yellow"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "Alert Debug Instructions",
+        "type": "text",
+        "gridPos": {
+          "h": 4,
+          "w": 24,
+          "x": 0,
+          "y": 10
+        },
+        "options": {
+          "content": "## Alert Debug Dashboard\n\nThis dashboard shows currently firing alerts from Prometheus.\n\n**Usage:**\n- Review the table above to see all firing alerts\n- Check alert labels and severity\n- Use the runbook_url annotation to access remediation steps\n- Query individual alert expressions in Prometheus to debug\n\n**Note:** If no alerts are showing, ensure:\n1. Prometheus is scraping targets\n2. Alert rules are loaded in Prometheus\n3. Alerts have fired and are in 'firing' state"
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {
+            "text": "Prometheus",
+            "value": "Prometheus"
+          }
+        }
+      ]
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+}

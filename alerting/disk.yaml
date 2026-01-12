@@ -1,0 +1,33 @@
+groups:
+  - name: disk
+    interval: 30s
+    rules:
+      - alert: DiskSpaceLow
+        expr: |
+          (
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"}) * 100
+          ) < 15
+          and
+          node_filesystem_readonly{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space is low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "Disk space is below 15% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 10 minutes"
+          runbook_url: "https://runbooks.example.com/disk-full"
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"}) * 100
+          ) < 5
+          and
+          node_filesystem_readonly{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space is critically low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "Disk space is below 5% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 5 minutes"
+          runbook_url: "https://runbooks.example.com/disk-full"
