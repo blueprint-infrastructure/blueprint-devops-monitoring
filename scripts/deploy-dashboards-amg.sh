@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 AMG_WORKSPACE_ID="${AMG_WORKSPACE_ID:-}"
 AMG_REGION="${AMG_REGION:-${AWS_REGION:-us-east-1}}"
 AMG_API_KEY="${AMG_API_KEY:-}"
-AMG_ENDPOINT="${AMG_ENDPOINT:-}"
+AMG_ENDPOINT="${AMG_ENDPOINT:-${AMG_WORKSPACE_ID}.grafana-workspace.${AMG_REGION}.amazonaws.com}"
 OVERWRITE="${OVERWRITE:-true}"
 DASHBOARDS_DIR="${REPO_ROOT}/dashboards"
 
@@ -127,10 +127,11 @@ for dashboard_file in "${DASHBOARD_FILES[@]}"; do
     
     # Wrap dashboard in API format
     if command -v jq &> /dev/null; then
+        # Use --slurpfile for wider jq compatibility (avoids --argfile)
         jq -n \
-            --argfile dashboard "$dashboard_file" \
+            --slurpfile dashboard "$dashboard_file" \
             --arg overwrite "$OVERWRITE" \
-            '{dashboard: $dashboard, overwrite: ($overwrite | test("true"))}' \
+            '{dashboard: $dashboard[0], overwrite: ($overwrite == "true")}' \
             > "${TEMP_DASHBOARD}"
     else
         # Fallback: manual JSON construction
