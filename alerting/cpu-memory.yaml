@@ -11,7 +11,7 @@ groups:
         annotations:
           summary: "High CPU usage on {{ $labels.instance }}"
           description: "CPU usage is above 85% ({{ $value | humanizePercentage }}) on {{ $labels.instance }} for more than 10 minutes"
-          runbook_url: "https://runbooks.example.com/high-cpu"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"
 
       - alert: HighCPUCritical
         expr: |
@@ -22,7 +22,7 @@ groups:
         annotations:
           summary: "Critical CPU usage on {{ $labels.instance }}"
           description: "CPU usage is above 95% ({{ $value | humanizePercentage }}) on {{ $labels.instance }} for more than 5 minutes"
-          runbook_url: "https://runbooks.example.com/high-cpu"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"
 
       - alert: MemoryPressure
         expr: |
@@ -35,7 +35,7 @@ groups:
         annotations:
           summary: "Memory pressure on {{ $labels.instance }}"
           description: "Available memory is below 15% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }} for more than 10 minutes"
-          runbook_url: "https://runbooks.example.com/high-cpu"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"
 
       - alert: MemoryPressureCritical
         expr: |
@@ -48,4 +48,4 @@ groups:
         annotations:
           summary: "Critical memory pressure on {{ $labels.instance }}"
           description: "Available memory is below 5% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }} for more than 5 minutes"
-          runbook_url: "https://runbooks.example.com/high-cpu"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"

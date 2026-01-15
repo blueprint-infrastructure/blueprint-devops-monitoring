@@ -50,4 +50,11 @@ Runbooks are named after the alert they address:
 
 ## Integration
 
-Runbooks are referenced in alert annotations via `runbook_url`. Use relative paths or placeholder URLs that can be resolved by your documentation system.
+Runbooks are referenced in alert annotations via `runbook_url`. Use GitHub blob URLs:
+
+```
+https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/<runbook>.md
+```
+
+Example:
+- `disk-full.md` → `https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/disk-full.md`

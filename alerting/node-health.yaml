@@ -10,7 +10,7 @@ groups:
         annotations:
           summary: "Node {{ $labels.instance }} is down"
           description: "Node {{ $labels.instance }} has been down for more than 2 minutes. Job: {{ $labels.job }}"
-          runbook_url: "https://runbooks.example.com/node-down"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"
 
       - alert: TargetScrapeError
         expr: up == 1 and scrape_samples_scraped == 0
@@ -20,4 +20,4 @@ groups:
         annotations:
           summary: "Target {{ $labels.instance }} is not returning samples"
           description: "Target {{ $labels.instance }} (job: {{ $labels.job }}) is up but scrape_samples_scraped is 0 for more than 5 minutes"
-          runbook_url: "https://runbooks.example.com/node-down"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"

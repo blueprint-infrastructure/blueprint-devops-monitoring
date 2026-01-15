@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Master deployment script for monitoring as code
-# Deploys alert rules to AMP and dashboards to AMG
+# Deploys dashboards to Amazon Managed Grafana (AMG)
+#
+# Note: Alerts and notifications are managed directly in Grafana UI
+# See: https://docs.aws.amazon.com/grafana/latest/userguide/v10-alerting-use-grafana-alerts.html
 
 set -euo pipefail
 
@@ -32,39 +35,42 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # Parse command line arguments
-DEPLOY_ALERTS=true
+SKIP_VALIDATION=false
 DEPLOY_DASHBOARDS=true
+DEPLOY_ALERTS=true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --alerts-only)
-            DEPLOY_DASHBOARDS=false
+        --skip-validation)
+            SKIP_VALIDATION=true
             shift
             ;;
         --dashboards-only)
             DEPLOY_ALERTS=false
             shift
             ;;
+        --alerts-only)
+            DEPLOY_DASHBOARDS=false
+            shift
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --alerts-only      Deploy only alert rules to AMP"
-            echo "  --dashboards-only   Deploy only dashboards to AMG"
+            echo "  --skip-validation  Skip pre-deployment validation"
+            echo "  --dashboards-only  Deploy only dashboards"
+            echo "  --alerts-only      Deploy only alert rules"
             echo "  --help             Show this help message"
             echo ""
             echo "Environment variables:"
-            echo "  AMP_WORKSPACE_ID    Amazon Managed Prometheus workspace ID"
-            echo "  AMP_REGION          AWS region for AMP (default: us-east-1)"
-            echo "  AMP_RULE_NAMESPACE  Rule namespace in AMP (default: default)"
-            echo "  AMG_WORKSPACE_ID    Amazon Managed Grafana workspace ID"
+            echo "  AMG_WORKSPACE_ID    Amazon Managed Grafana workspace ID (required)"
             echo "  AMG_REGION          AWS region for AMG (default: us-east-1)"
-            echo "  AMG_API_KEY         Grafana API key (optional, will try to create)"
-            echo "  AMG_ENDPOINT        Grafana endpoint (optional, will auto-detect)"
             echo "  OVERWRITE           Overwrite existing dashboards (default: true)"
+            echo "  DATASOURCE_UID      Prometheus datasource UID for alerts (default: prometheus)"
             echo ""
             echo "Example:"
-            echo "  AMP_WORKSPACE_ID=ws-xxx AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh"
+            echo "  AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh"
+            echo "  AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh --dashboards-only"
             exit 0
             ;;
         *)
@@ -76,30 +82,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate before deployment
-echo "Running pre-deployment validation..."
-if ! "${SCRIPT_DIR}/validate.sh"; then
-    echo -e "${YELLOW}⚠ Validation failed, but continuing with deployment...${NC}"
-    echo ""
+if [ "$SKIP_VALIDATION" = false ]; then
+    echo "Running pre-deployment validation..."
+    if ! "${SCRIPT_DIR}/validate.sh"; then
+        echo -e "${YELLOW}⚠ Validation failed, but continuing with deployment...${NC}"
+        echo ""
+    fi
 fi
 
-# Deploy alerts to AMP
-if [ "$DEPLOY_ALERTS" = true ]; then
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}Deploying Alert Rules to AMP${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    
-    if [ -z "${AMP_WORKSPACE_ID:-}" ]; then
-        echo -e "${YELLOW}⚠ AMP_WORKSPACE_ID not set, skipping alert deployment${NC}"
-    else
-        if "${SCRIPT_DIR}/deploy-alerts-amp.sh"; then
-            echo -e "${GREEN}✓ Alert rules deployed successfully${NC}"
-        else
-            echo -e "${RED}✗ Alert rules deployment failed${NC}"
-            exit 1
-        fi
-    fi
-    echo ""
+# Check AMG_WORKSPACE_ID
+if [ -z "${AMG_WORKSPACE_ID:-}" ]; then
+    echo -e "${RED}✗ AMG_WORKSPACE_ID not set${NC}"
+    echo "Usage: AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh"
+    exit 1
 fi
 
 # Deploy dashboards to AMG
@@ -108,16 +103,28 @@ if [ "$DEPLOY_DASHBOARDS" = true ]; then
     echo -e "${BLUE}Deploying Dashboards to AMG${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
-    
-    if [ -z "${AMG_WORKSPACE_ID:-}" ]; then
-        echo -e "${YELLOW}⚠ AMG_WORKSPACE_ID not set, skipping dashboard deployment${NC}"
+
+    if "${SCRIPT_DIR}/deploy-dashboards-amg.sh"; then
+        echo -e "${GREEN}✓ Dashboards deployed successfully${NC}"
     else
-        if "${SCRIPT_DIR}/deploy-dashboards-amg.sh"; then
-            echo -e "${GREEN}✓ Dashboards deployed successfully${NC}"
-        else
-            echo -e "${RED}✗ Dashboard deployment failed${NC}"
-            exit 1
-        fi
+        echo -e "${RED}✗ Dashboard deployment failed${NC}"
+        exit 1
+    fi
+    echo ""
+fi
+
+# Deploy alerts to Grafana
+if [ "$DEPLOY_ALERTS" = true ]; then
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Deploying Alert Rules to Grafana${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    if "${SCRIPT_DIR}/deploy-alerts-amg.sh"; then
+        echo -e "${GREEN}✓ Alert rules deployed successfully${NC}"
+    else
+        echo -e "${RED}✗ Alert rules deployment failed${NC}"
+        exit 1
     fi
     echo ""
 fi
@@ -125,3 +132,8 @@ fi
 echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
 echo -e "${BLUE}========================================${NC}"
+echo ""
+echo "Next steps:"
+echo "  1. Verify alerts in Grafana: Alerting -> Alert rules"
+echo "  2. Set up notification channels: Alerting -> Contact points"
+echo "  3. Configure routing: Alerting -> Notification policies"

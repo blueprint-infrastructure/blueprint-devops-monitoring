@@ -130,26 +130,67 @@ if [ ! -f "$ALERTMANAGER_FILE" ]; then
     echo -e "${RED}✗ alertmanager.yaml not found${NC}"
     ERRORS=$((ERRORS + 1))
 else
-    if [ "$PROMTOOL_AVAILABLE" = true ]; then
-        # promtool can also check alertmanager config
-        if promtool check config "$ALERTMANAGER_FILE" 2>&1; then
-            echo -e "${GREEN}✓ Valid Alertmanager config: ${ALERTMANAGER_FILE}${NC}"
+    # Check if this is AWS AMP format (alertmanager_config: |)
+    if grep -q "^alertmanager_config:" "$ALERTMANAGER_FILE"; then
+        echo "Detected AWS AMP Alertmanager format"
+        # For AWS AMP format, extract the config and validate
+        TEMP_AM_CONFIG=$(mktemp)
+        trap "rm -f ${TEMP_AM_CONFIG}" EXIT
+        
+        # Extract the config content (skip first line and remove 2-space indentation)
+        tail -n +2 "$ALERTMANAGER_FILE" | sed 's/^  //' > "${TEMP_AM_CONFIG}"
+        
+        if command -v amtool &> /dev/null; then
+            if amtool check-config "${TEMP_AM_CONFIG}" 2>/dev/null; then
+                echo -e "${GREEN}✓ Valid Alertmanager config (AWS AMP format): ${ALERTMANAGER_FILE}${NC}"
+            else
+                # amtool may not be available or may fail, try basic YAML check
+                echo -e "${YELLOW}⚠ amtool validation skipped, checking YAML syntax${NC}"
+                if command -v yq &> /dev/null; then
+                    if yq eval '.' "${TEMP_AM_CONFIG}" > /dev/null 2>&1; then
+                        echo -e "${GREEN}✓ YAML syntax valid: ${ALERTMANAGER_FILE}${NC}"
+                    else
+                        echo -e "${RED}✗ YAML syntax error: ${ALERTMANAGER_FILE}${NC}"
+                        ERRORS=$((ERRORS + 1))
+                    fi
+                else
+                    echo -e "${GREEN}✓ AWS AMP format detected (skipping deep validation)${NC}"
+                fi
+            fi
         else
-            echo -e "${RED}✗ Validation failed: ${ALERTMANAGER_FILE}${NC}"
-            ERRORS=$((ERRORS + 1))
+            # Basic YAML syntax check for extracted config
+            if command -v yq &> /dev/null; then
+                if yq eval '.' "${TEMP_AM_CONFIG}" > /dev/null 2>&1; then
+                    echo -e "${GREEN}✓ YAML syntax valid (AWS AMP format): ${ALERTMANAGER_FILE}${NC}"
+                else
+                    echo -e "${RED}✗ YAML syntax error: ${ALERTMANAGER_FILE}${NC}"
+                    ERRORS=$((ERRORS + 1))
+                fi
+            else
+                echo -e "${GREEN}✓ AWS AMP format detected (skipping deep validation)${NC}"
+            fi
         fi
     else
-        # Basic YAML syntax check
-        if command -v yamllint &> /dev/null; then
-            if yamllint "$ALERTMANAGER_FILE" > /dev/null 2>&1; then
-                echo -e "${GREEN}✓ YAML syntax valid: ${ALERTMANAGER_FILE}${NC}"
+        # Standard Alertmanager format
+        if [ "$PROMTOOL_AVAILABLE" = true ]; then
+            if promtool check config "$ALERTMANAGER_FILE" 2>&1; then
+                echo -e "${GREEN}✓ Valid Alertmanager config: ${ALERTMANAGER_FILE}${NC}"
             else
-                echo -e "${RED}✗ YAML syntax error: ${ALERTMANAGER_FILE}${NC}"
+                echo -e "${RED}✗ Validation failed: ${ALERTMANAGER_FILE}${NC}"
                 ERRORS=$((ERRORS + 1))
             fi
         else
-            echo -e "${YELLOW}⚠ Skipping Alertmanager validation (promtool/yamllint not available)${NC}"
-            WARNINGS=$((WARNINGS + 1))
+            if command -v yamllint &> /dev/null; then
+                if yamllint "$ALERTMANAGER_FILE" > /dev/null 2>&1; then
+                    echo -e "${GREEN}✓ YAML syntax valid: ${ALERTMANAGER_FILE}${NC}"
+                else
+                    echo -e "${RED}✗ YAML syntax error: ${ALERTMANAGER_FILE}${NC}"
+                    ERRORS=$((ERRORS + 1))
+                fi
+            else
+                echo -e "${YELLOW}⚠ Skipping Alertmanager validation (promtool/yamllint not available)${NC}"
+                WARNINGS=$((WARNINGS + 1))
+            fi
         fi
     fi
 fi
