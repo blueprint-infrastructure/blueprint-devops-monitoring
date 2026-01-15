@@ -42,7 +42,8 @@ echo ""
 
 # Create temporary file for combined rules
 TEMP_RULES_FILE=$(mktemp)
-trap "rm -f ${TEMP_RULES_FILE}" EXIT
+echo "TEMP_RULES_FILE: ${TEMP_RULES_FILE}"
+#trap "rm -f ${TEMP_RULES_FILE}" EXIT
 
 # Combine all YAML rule files
 echo "Combining alert rule files..."
@@ -126,20 +127,58 @@ fi
 # Deploy to AMP
 echo ""
 echo "Deploying rules to AMP workspace..."
-if aws amp put-rule-groups-namespace \
+
+# AMP requires base64 encoded data
+ENCODED_RULES=$(base64 < "${TEMP_RULES_FILE}")
+
+# Check if namespace exists
+if aws amp describe-rule-groups-namespace \
     --workspace-id "${AMP_WORKSPACE_ID}" \
     --name "${AMP_RULE_NAMESPACE}" \
-    --data "file://${TEMP_RULES_FILE}" \
     --region "${AMP_REGION}" \
     > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ Successfully deployed alert rules to AMP${NC}"
-    echo "  Workspace: ${AMP_WORKSPACE_ID}"
-    echo "  Namespace: ${AMP_RULE_NAMESPACE}"
+    # Namespace exists, update it
+    echo "Updating existing namespace '${AMP_RULE_NAMESPACE}'..."
+    if aws amp put-rule-groups-namespace \
+        --workspace-id "${AMP_WORKSPACE_ID}" \
+        --name "${AMP_RULE_NAMESPACE}" \
+        --data "${ENCODED_RULES}" \
+        --region "${AMP_REGION}" \
+        > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Successfully updated alert rules in AMP${NC}"
+        echo "  Workspace: ${AMP_WORKSPACE_ID}"
+        echo "  Namespace: ${AMP_RULE_NAMESPACE}"
+    else
+        echo -e "${RED}✗ Failed to update alert rules in AMP${NC}"
+        echo "Temp file location: ${TEMP_RULES_FILE}"
+        exit 1
+    fi
 else
-    echo -e "${RED}✗ Failed to deploy alert rules to AMP${NC}"
-    echo "Run with AWS CLI debug output for more details:"
-    echo "  AWS_CLI_LOG_LEVEL=debug aws amp put-rule-groups-namespace ..."
-    exit 1
+    # Namespace doesn't exist, create it
+    echo "Creating new namespace '${AMP_RULE_NAMESPACE}'..."
+    if aws amp create-rule-groups-namespace \
+        --workspace-id "${AMP_WORKSPACE_ID}" \
+        --name "${AMP_RULE_NAMESPACE}" \
+        --data "${ENCODED_RULES}" \
+        --region "${AMP_REGION}" \
+        > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Successfully created alert rules in AMP${NC}"
+        echo "  Workspace: ${AMP_WORKSPACE_ID}"
+        echo "  Namespace: ${AMP_RULE_NAMESPACE}"
+    else
+        echo -e "${RED}✗ Failed to create alert rules in AMP${NC}"
+        echo ""
+        echo "Debug command:"
+        echo "  ENCODED=\$(base64 < ${TEMP_RULES_FILE})"
+        echo "  aws amp create-rule-groups-namespace \\"
+        echo "    --workspace-id ${AMP_WORKSPACE_ID} \\"
+        echo "    --name ${AMP_RULE_NAMESPACE} \\"
+        echo "    --data \"\${ENCODED}\" \\"
+        echo "    --region ${AMP_REGION}"
+        echo ""
+        echo "Temp file location: ${TEMP_RULES_FILE}"
+        exit 1
+    fi
 fi
 
 echo ""
