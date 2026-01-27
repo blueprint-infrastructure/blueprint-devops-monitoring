@@ -1,39 +1,64 @@
 # Chain-Specific Dashboards
 
-This directory contains Grafana dashboard JSON files specific to blockchain networks and chain operations.
+This directory will contain Grafana dashboards for blockchain validator monitoring.
 
-## Supported Chains
+## Planned Dashboards
 
-Chain-specific dashboards should be organized by chain name (e.g., `solana-overview.json`, `ethereum-metrics.json`, `avalanche-health.json`).
+| Dashboard | Chain | Description |
+|-----------|-------|-------------|
+| `ethereum-validator.json` | Ethereum | Execution + consensus client metrics, sync status, peer connectivity |
+| `solana-validator.json` | Solana | Validator health, vote status, slot sync |
+| `avalanche-validator.json` | Avalanche | Node health, P/X/C chain status, staking metrics |
 
-## Conventions
+## Metrics Source
 
-- Use descriptive dashboard titles with chain name prefix
-- Include chain-specific metrics (e.g., block height, validator status, transaction throughput)
-- Follow Grafana dashboard JSON schema version 27+
-- Use datasource variables for flexibility (`$datasource`)
-- Tag dashboards appropriately for easy discovery
-
-## Example Structure
+These dashboards visualize metrics collected by the Blueprint Validator Agent:
 
 ```
-chain/
-├── README.md
-├── solana-overview.json      # Solana validator overview
-├── ethereum-metrics.json     # Ethereum node metrics
-└── avalanche-health.json     # Avalanche node health
+agents/
+├── collectors/
+│   ├── ethereum.sh   → ethereum_* metrics
+│   ├── solana.sh     → solana_* metrics
+│   └── avalanche.sh  → avalanche_* metrics
 ```
 
-## Getting Started
+## Key Panels (per chain)
 
-1. Identify chain-specific metrics exposed by your node exporters
-2. Create a new JSON dashboard file for your chain
-3. Import into Grafana using the UI or API
-4. Reference corresponding alert rules in `../../alerting/chain/`
+### Overview Row
+- Validator status (healthy/degraded/down)
+- Sync percentage
+- Peer count
+- Node uptime
 
-## Dashboard Import
+### Sync Status Row
+- Current block/slot
+- Blocks/slots behind
+- Sync progress over time
 
-Dashboards can be imported into Grafana via:
-- **UI**: Dashboard → Import → Paste JSON
-- **API**: `POST /api/dashboards/db`
-- **GitOps**: Using Grafana provisioning or Terraform
+### Network Row
+- Peer count over time
+- Peer connection stability
+
+### Container Health (Docker deployments)
+- Container status
+- Restart count
+- Health check history
+
+## Installation
+
+```bash
+# Deploy all dashboards to Grafana
+./scripts/deploy.sh --dashboards-only
+
+# Or deploy specific chain dashboard
+./scripts/deploy-dashboards-amg.sh dashboards/chain/ethereum-validator.json
+```
+
+## Creating Dashboards
+
+When creating new dashboards:
+
+1. Use the `chain` label for filtering: `{chain="ethereum"}`
+2. Use the `instance` label for multi-node views
+3. Include links to alert rules and runbooks
+4. Add appropriate time range defaults (15m for real-time, 24h for trends)

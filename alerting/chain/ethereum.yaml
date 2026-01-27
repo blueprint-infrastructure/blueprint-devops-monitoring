@@ -1,0 +1,251 @@
+groups:
+  - name: ethereum_validator
+    interval: 30s
+    rules:
+      # =======================================================================
+      # Node Health Alerts
+      # =======================================================================
+      
+      - alert: BesuDown
+        expr: up{job="besu"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu execution client is down on {{ $labels.instance }}"
+          description: "Besu has been unreachable for more than 2 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-node-down.md"
+
+      - alert: TekuBeaconDown
+        expr: up{job="teku_beacon"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku beacon node is down on {{ $labels.instance }}"
+          description: "Teku beacon node has been unreachable for more than 2 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-node-down.md"
+
+      - alert: TekuValidatorDown
+        expr: up{job="teku_validator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: validator
+        annotations:
+          summary: "Teku validator client is down on {{ $labels.instance }}"
+          description: "Teku validator client has been unreachable for more than 2 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-node-down.md"
+
+      # =======================================================================
+      # Sync Status Alerts (Besu)
+      # =======================================================================
+
+      - alert: BesuNotSynced
+        expr: besu_synchronizer_in_sync == 0
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu is not in sync on {{ $labels.instance }}"
+          description: "Besu execution client has been out of sync for more than 10 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      - alert: BesuBlocksBehind
+        expr: (ethereum_best_known_block_number - ethereum_blockchain_height) > 100
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu is {{ $value }} blocks behind on {{ $labels.instance }}"
+          description: "Besu execution client is more than 100 blocks behind the network"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      - alert: BesuBlocksSignificantlyBehind
+        expr: (ethereum_best_known_block_number - ethereum_blockchain_height) > 1000
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu is {{ $value }} blocks behind on {{ $labels.instance }}"
+          description: "Besu is significantly behind - validator may miss attestations"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      # =======================================================================
+      # Sync Status Alerts (Teku)
+      # =======================================================================
+
+      - alert: TekuSyncing
+        expr: beacon_is_syncing == 1
+        for: 30m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku beacon node is syncing on {{ $labels.instance }}"
+          description: "Teku has been syncing for more than 30 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      - alert: TekuSlotsBehind
+        expr: (beacon_slot - beacon_head_slot) > 32
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku is {{ $value }} slots behind on {{ $labels.instance }}"
+          description: "Teku beacon node is more than 1 epoch behind (32 slots)"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      - alert: TekuSlotsSignificantlyBehind
+        expr: (beacon_slot - beacon_head_slot) > 225
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku is {{ $value }} slots behind on {{ $labels.instance }}"
+          description: "Teku is more than 1 finality period behind - attestations will be missed"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
+
+      # =======================================================================
+      # Peer Connectivity
+      # =======================================================================
+
+      - alert: BesuLowPeers
+        expr: ethereum_peer_count < 5
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu has only {{ $value }} peers on {{ $labels.instance }}"
+          description: "Besu has fewer than 5 peers - network connectivity may be impaired"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
+
+      - alert: BesuNoPeers
+        expr: ethereum_peer_count == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: execution
+        annotations:
+          summary: "Besu has no peers on {{ $labels.instance }}"
+          description: "Besu is isolated with no peer connections"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
+
+      - alert: TekuLowPeers
+        expr: beacon_peer_count < 10
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku has only {{ $value }} peers on {{ $labels.instance }}"
+          description: "Teku beacon node has fewer than 10 peers"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
+
+      - alert: TekuNoPeers
+        expr: beacon_peer_count == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: consensus
+        annotations:
+          summary: "Teku has no peers on {{ $labels.instance }}"
+          description: "Teku beacon node is isolated with no peer connections"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
+
+      # =======================================================================
+      # Validator Performance
+      # =======================================================================
+
+      - alert: ValidatorMissedAttestations
+        expr: increase(validator_attestation_publication_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          chain: ethereum
+          component: validator
+        annotations:
+          summary: "Validator missed attestations on {{ $labels.instance }}"
+          description: "Validator failed to publish {{ $value }} attestations in the last 5 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/validator-performance.md"
+
+      - alert: ValidatorMissedBlocks
+        expr: increase(validator_block_publication_failed_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          chain: ethereum
+          component: validator
+        annotations:
+          summary: "Validator missed block proposals on {{ $labels.instance }}"
+          description: "Validator failed to publish {{ $value }} blocks in the last hour"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/validator-performance.md"
+
+      # =======================================================================
+      # System Resources (from node_exporter)
+      # =======================================================================
+
+      - alert: HighCPU
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 85% for more than 10 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/high-cpu.md"
+
+      - alert: HighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for more than 10 minutes"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/high-memory.md"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+          chain: ethereum
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Less than 15% disk space remaining on root filesystem"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/disk-full.md"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+        annotations:
+          summary: "Disk space critical on {{ $labels.instance }}"
+          description: "Less than 5% disk space remaining - validator at risk"
+          runbook_url: "https://github.com/your-org/runbooks/blob/main/disk-full.md"
