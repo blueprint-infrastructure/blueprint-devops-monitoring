@@ -173,7 +173,8 @@ integrations:
 EOF
 
 # Set permissions - grafana-agent user needs to read this
-chown root:grafana-agent /etc/grafana-agent.yaml 2>/dev/null || chmod 644 /etc/grafana-agent.yaml
+chmod 644 /etc/grafana-agent.yaml
+chown root:grafana-agent /etc/grafana-agent.yaml 2>/dev/null || true
 
 # Restart service
 systemctl daemon-reload
