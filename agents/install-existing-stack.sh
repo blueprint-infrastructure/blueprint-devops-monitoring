@@ -130,6 +130,7 @@ cat > /etc/grafana-agent.yaml <<EOF
 
 server:
   log_level: info
+  http_listen_port: 12345
 
 metrics:
   global:
