@@ -111,6 +111,189 @@
       }
     },
     {
+      "id": 9,
+      "title": "Validator Services Health",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon\"})",
+          "legendFormat": "Execution",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(up{chain=~\"$chain\",job=~\"teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|lodestar_beacon\"})",
+          "legendFormat": "Consensus",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(up{chain=~\"$chain\",job=~\"teku_validator|lighthouse_validator|prysm_validator|nimbus_validator|lodestar_validator\"})",
+          "legendFormat": "Validator",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 1,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Execution Sync Status",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(besu_synchronizer_in_sync{chain=~\"$chain\"})",
+          "legendFormat": "In Sync",
+          "refId": "A"
+        },
+        {
+          "expr": "max(ethereum_best_known_block_number{chain=~\"$chain\"} - ethereum_blockchain_height{chain=~\"$chain\"})",
+          "legendFormat": "Blocks Behind",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "N/A"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "In Sync"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 1,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Synced",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Blocks Behind"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
       "id": 2,
       "title": "Node Status Table",
       "type": "table",
@@ -258,6 +441,341 @@
       ]
     },
     {
+      "id": 12,
+      "title": "Validator & Sync Status",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon|teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|teku_validator|lighthouse_validator|prysm_validator|nimbus_validator\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "label_replace(besu_synchronizer_in_sync{chain=~\"$chain\"}, \"job\", \"besu\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "label_replace(ethereum_best_known_block_number{chain=~\"$chain\"} - on(instance,chain) ethereum_blockchain_height{chain=~\"$chain\"}, \"job\", \"besu\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "label_replace(1 - beacon_is_syncing{chain=~\"$chain\"}, \"job\", \"$1\", \"job\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "label_replace(beacon_slot{chain=~\"$chain\"} - on(instance,chain) beacon_head_slot{chain=~\"$chain\"}, \"job\", \"$1\", \"job\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false,
+            "width": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "__name__"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #A (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Status"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Exec Synced"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Synced",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Blocks Behind"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #D (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Beacon Synced"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Synced",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #E (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Slots Behind"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 32,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 225,
+                      "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "instance"
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": {
+                "operation": "groupby",
+                "aggregations": []
+              },
+              "job": {
+                "operation": "groupby",
+                "aggregations": []
+              },
+              "chain": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #A": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #B": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #C": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #D": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #E": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {
+              "chain (lastNotNull)": "chain",
+              "Value #A (lastNotNull)": "Status",
+              "Value #B (lastNotNull)": "Exec Synced",
+              "Value #C (lastNotNull)": "Blocks Behind",
+              "Value #D (lastNotNull)": "Beacon Synced",
+              "Value #E (lastNotNull)": "Slots Behind"
+            },
+            "indexByName": {
+              "instance": 0,
+              "job": 1,
+              "chain (lastNotNull)": 2,
+              "Value #A (lastNotNull)": 3,
+              "Value #B (lastNotNull)": 4,
+              "Value #C (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 6,
+              "Value #E (lastNotNull)": 7
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": 3,
       "title": "CPU Usage - Average",
       "type": "timeseries",
@@ -265,7 +783,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 20
       },
       "targets": [
         {
@@ -363,7 +881,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 20
       },
       "targets": [
         {
@@ -452,7 +970,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 28
       },
       "targets": [
         {
@@ -545,7 +1063,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 28
       },
       "targets": [
         {
@@ -634,7 +1152,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 36
       },
       "targets": [
         {
@@ -723,7 +1241,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 36
       },
       "targets": [
         {
