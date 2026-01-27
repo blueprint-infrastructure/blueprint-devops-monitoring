@@ -18,12 +18,12 @@
       },
       "targets": [
         {
-          "expr": "sum(up)",
+          "expr": "sum(up{chain=~\"$chain\"})",
           "legendFormat": "Up",
           "refId": "A"
         },
         {
-          "expr": "count(up) - sum(up)",
+          "expr": "count(up{chain=~\"$chain\"}) - sum(up{chain=~\"$chain\"})",
           "legendFormat": "Down",
           "refId": "B"
         }
@@ -122,7 +122,7 @@
       },
       "targets": [
         {
-          "expr": "up{instance=~\"$instance\"}",
+          "expr": "up{chain=~\"$chain\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -269,17 +269,17 @@
       },
       "targets": [
         {
-          "expr": "avg(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$instance\"}[5m])) * 100))",
+          "expr": "avg(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
           "legendFormat": "Average",
           "refId": "A"
         },
         {
-          "expr": "max(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$instance\"}[5m])) * 100))",
+          "expr": "max(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
           "legendFormat": "Max",
           "refId": "B"
         },
         {
-          "expr": "min(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$instance\"}[5m])) * 100))",
+          "expr": "min(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
           "legendFormat": "Min",
           "refId": "C"
         }
@@ -367,7 +367,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$instance\"}[5m])) * 100)",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100)",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -456,12 +456,12 @@
       },
       "targets": [
         {
-          "expr": "avg((node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"}) * 100)",
+          "expr": "avg((node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
           "legendFormat": "Average",
           "refId": "A"
         },
         {
-          "expr": "min((node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"}) * 100)",
+          "expr": "min((node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
           "legendFormat": "Min",
           "refId": "B"
         }
@@ -549,7 +549,7 @@
       },
       "targets": [
         {
-          "expr": "(node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"}) * 100",
+          "expr": "(node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -638,7 +638,7 @@
       },
       "targets": [
         {
-          "expr": "topk(10, 100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"}) * 100))",
+          "expr": "topk(10, 100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
           "legendFormat": "{{instance}}:{{mountpoint}}",
           "refId": "A"
         }
@@ -727,12 +727,12 @@
       },
       "targets": [
         {
-          "expr": "avg(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"}) * 100))",
+          "expr": "avg(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
           "legendFormat": "Average",
           "refId": "A"
         },
         {
-          "expr": "max(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",instance=~\"$instance\"}) * 100))",
+          "expr": "max(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
           "legendFormat": "Max",
           "refId": "B"
         }
@@ -821,6 +821,34 @@
         }
       },
       {
+        "name": "chain",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$datasource"
+        },
+        "query": {
+          "query": "label_values(up{chain!=\"\"}, chain)",
+          "refId": "StandardVariableQuery"
+        },
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          }
+        ],
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "regex": ""
+      },
+      {
         "name": "instance",
         "type": "query",
         "datasource": {
@@ -828,7 +856,7 @@
           "uid": "$datasource"
         },
         "query": {
-          "query": "label_values(up, instance)",
+          "query": "label_values(up{chain=~\"$chain\"}, instance)",
           "refId": "StandardVariableQuery"
         },
         "current": {
@@ -856,7 +884,7 @@
           "uid": "$datasource"
         },
         "query": {
-          "query": "label_values(node_filesystem_size_bytes{mountpoint!~\"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*\"}, mountpoint)",
+          "query": "label_values(node_filesystem_size_bytes{chain=~\"$chain\",mountpoint!~\"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*\"}, mountpoint)",
           "refId": "StandardVariableQuery"
         },
         "current": {
