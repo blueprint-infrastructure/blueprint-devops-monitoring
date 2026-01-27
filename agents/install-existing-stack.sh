@@ -173,6 +173,13 @@ EOF
 chmod 644 /etc/grafana-agent.yaml
 chown root:grafana-agent /etc/grafana-agent.yaml 2>/dev/null || true
 
+# Create systemd override to change HTTP port (avoid conflict with Prometheus on 9090)
+mkdir -p /etc/systemd/system/grafana-agent.service.d
+cat > /etc/systemd/system/grafana-agent.service.d/override.conf <<OVERRIDE
+[Service]
+Environment="CUSTOM_ARGS=--server.http.address=127.0.0.1:12345"
+OVERRIDE
+
 # Restart service
 systemctl daemon-reload
 systemctl enable grafana-agent
