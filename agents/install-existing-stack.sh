@@ -128,10 +128,6 @@ cat > /etc/grafana-agent.yaml <<EOF
 # Mode: Federation from existing Prometheus
 # Prometheus targets: ${PROM_TARGETS}
 
-server:
-  log_level: info
-  http_listen_address: 127.0.0.1:12345
-
 metrics:
   global:
     scrape_interval: 15s
