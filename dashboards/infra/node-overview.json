@@ -111,8 +111,8 @@
       }
     },
     {
-      "id": 9,
-      "title": "Validator Services Health",
+      "id": 10,
+      "title": "Ethereum Sync Status",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -122,19 +122,9 @@
       },
       "targets": [
         {
-          "expr": "sum(up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon\"})",
-          "legendFormat": "Execution",
+          "expr": "sum(besu_synchronizer_in_sync{chain=~\"$chain\"})",
+          "legendFormat": "In Sync",
           "refId": "A"
-        },
-        {
-          "expr": "sum(up{chain=~\"$chain\",job=~\"teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|lodestar_beacon\"})",
-          "legendFormat": "Consensus",
-          "refId": "B"
-        },
-        {
-          "expr": "sum(up{chain=~\"$chain\",job=~\"teku_validator|lighthouse_validator|prysm_validator|nimbus_validator|lodestar_validator\"})",
-          "legendFormat": "Validator",
-          "refId": "C"
         }
       ],
       "fieldConfig": {
@@ -156,131 +146,23 @@
             ]
           },
           "unit": "short",
-          "noValue": "0"
-        }
-      },
-      "options": {
-        "graphMode": "none",
-        "colorMode": "value",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        }
-      }
-    },
-    {
-      "id": 10,
-      "title": "Ethereum Sync Status",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "sum(besu_synchronizer_in_sync{chain=~\"$chain\"})",
-          "legendFormat": "In Sync",
-          "refId": "A"
-        },
-        {
-          "expr": "max(ethereum_best_known_block_number{chain=~\"$chain\"} - ethereum_blockchain_height{chain=~\"$chain\"})",
-          "legendFormat": "Blocks Behind",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "N/A"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "In Sync"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "red"
-                    },
-                    {
-                      "value": 1,
-                      "color": "green"
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Syncing",
-                        "color": "yellow"
-                      },
-                      "1": {
-                        "text": "Synced",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Blocks Behind"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 100,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1000,
-                      "color": "red"
-                    }
-                  ]
+          "noValue": "N/A",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Syncing",
+                  "color": "yellow"
+                },
+                "1": {
+                  "text": "Synced",
+                  "color": "green"
                 }
               }
-            ]
-          }
-        ]
+            }
+          ]
+        }
       },
       "options": {
         "graphMode": "none",
@@ -300,7 +182,7 @@
       "gridPos": {
         "h": 4,
         "w": 6,
-        "x": 18,
+        "x": 12,
         "y": 0
       },
       "targets": [
@@ -308,11 +190,6 @@
           "expr": "avalanche_c_chain_syncing{chain=~\"$chain\"} == 0",
           "legendFormat": "Synced",
           "refId": "A"
-        },
-        {
-          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\"}",
-          "legendFormat": "Blocks Behind",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -325,85 +202,32 @@
             "steps": [
               {
                 "value": null,
+                "color": "yellow"
+              },
+              {
+                "value": 1,
                 "color": "green"
               }
             ]
           },
           "unit": "short",
-          "noValue": "N/A"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Synced"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1,
-                      "color": "green"
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Syncing",
-                        "color": "yellow"
-                      },
-                      "1": {
-                        "text": "Synced",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Blocks Behind"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 100,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1000,
-                      "color": "red"
-                    }
-                  ]
+          "noValue": "N/A",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Syncing",
+                  "color": "yellow"
+                },
+                "1": {
+                  "text": "Synced",
+                  "color": "green"
                 }
               }
-            ]
-          }
-        ]
+            }
+          ]
+        }
       },
       "options": {
         "graphMode": "none",
@@ -564,6 +388,98 @@
       ]
     },
     {
+      "id": 14,
+      "title": "Blocks Behind by Node",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} (Ethereum)",
+          "refId": "A"
+        },
+        {
+          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} (Avalanche)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Blocks",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 100,
+                "color": "yellow"
+              },
+              {
+                "value": 1000,
+                "color": "red"
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
       "id": 12,
       "title": "Validator & Sync Status",
       "type": "table",
@@ -571,7 +487,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 20
       },
       "targets": [
         {
@@ -1000,7 +916,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 28
       },
       "targets": [
         {
@@ -1098,7 +1014,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 28
       },
       "targets": [
         {
@@ -1187,7 +1103,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 36
       },
       "targets": [
         {
@@ -1280,7 +1196,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 36
       },
       "targets": [
         {
@@ -1369,7 +1285,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 44
       },
       "targets": [
         {
@@ -1458,7 +1374,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 44
       },
       "targets": [
         {
