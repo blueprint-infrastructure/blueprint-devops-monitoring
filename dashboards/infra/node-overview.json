@@ -7,292 +7,48 @@
   "refresh": "30s",
   "panels": [
     {
-      "id": 1,
-      "title": "Node Status Summary",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "sum(up{chain=~\"$chain\"})",
-          "legendFormat": "Up",
-          "refId": "A"
-        },
-        {
-          "expr": "count(up{chain=~\"$chain\"}) - sum(up{chain=~\"$chain\"})",
-          "legendFormat": "Down",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Down"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "red"
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Up"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "graphMode": "none",
-        "colorMode": "value",
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        }
-      }
-    },
-    {
-      "id": 10,
-      "title": "Ethereum Sync Status",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "sum(besu_synchronizer_in_sync{chain=~\"$chain\"})",
-          "legendFormat": "In Sync",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "red"
-              },
-              {
-                "value": 1,
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "N/A",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Syncing",
-                  "color": "yellow"
-                },
-                "1": {
-                  "text": "Synced",
-                  "color": "green"
-                }
-              }
-            }
-          ]
-        }
-      },
-      "options": {
-        "graphMode": "none",
-        "colorMode": "value",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        }
-      }
-    },
-    {
-      "id": 13,
-      "title": "Avalanche Sync Status",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "avalanche_c_chain_syncing{chain=~\"$chain\"} == 0",
-          "legendFormat": "Synced",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "yellow"
-              },
-              {
-                "value": 1,
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "short",
-          "noValue": "N/A",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Syncing",
-                  "color": "yellow"
-                },
-                "1": {
-                  "text": "Synced",
-                  "color": "green"
-                }
-              }
-            }
-          ]
-        }
-      },
-      "options": {
-        "graphMode": "none",
-        "colorMode": "value",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        }
-      }
-    },
-    {
       "id": 2,
       "title": "Node Status Table",
       "type": "table",
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 0
       },
       "targets": [
         {
-          "expr": "up{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "min by (instance, chain) (up{chain=~\"$chain\",instance=~\"$instance\",instance!~\"localhost.*\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
+        },
+        {
+          "expr": "avalanche_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "(1 - avalanche_c_chain_syncing{chain=~\"$chain\",instance=~\"$instance\"}) or besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"} or (ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
             "align": "auto",
-            "displayMode": "color-background",
+            "displayMode": "auto",
             "inspect": false,
             "width": "auto"
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Down",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "Up",
-                  "color": "green"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "red"
-              },
-              {
-                "value": 1,
-                "color": "green"
-              }
-            ]
           }
         },
         "overrides": [
@@ -311,48 +67,138 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "__name__"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "instance"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": "auto"
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-text"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value"
+              "options": "Value #A"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "healthy"
-              },
-              {
-                "id": "custom.width",
-                "value": 100
+                "value": "Status"
               },
               {
                 "id": "custom.displayMode",
                 "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Healthy"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Unhealthy",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Healthy",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Synced"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Synced",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #D"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Blocks Behind"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -370,18 +216,59 @@
       },
       "transformations": [
         {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "chain": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "Value #A": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #B": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #C": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #D": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              }
+            }
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true,
-              "__name__": true
-            },
-            "renameByName": {
-              "Value": "healthy"
+              "Time": true
             },
             "indexByName": {
               "instance": 0,
-              "healthy": 1
+              "chain": 1,
+              "Value #A (lastNotNull)": 2,
+              "Value #B (lastNotNull)": 3,
+              "Value #C (lastNotNull)": 4,
+              "Value #D (lastNotNull)": 5
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Value #A",
+              "Value #B (lastNotNull)": "Value #B",
+              "Value #C (lastNotNull)": "Value #C",
+              "Value #D (lastNotNull)": "Value #D"
             }
           }
         }
@@ -395,7 +282,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 6
       },
       "targets": [
         {
@@ -441,7 +328,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "line"
+              "mode": "off"
             }
           },
           "mappings": [],
@@ -480,541 +367,14 @@
       }
     },
     {
-      "id": 12,
-      "title": "Validator & Sync Status",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 20
-      },
-      "targets": [
-        {
-          "expr": "up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon|teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|teku_validator|lighthouse_validator|prysm_validator|nimbus_validator|avalanchego|avalanche_collector\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "A"
-        },
-        {
-          "expr": "label_replace(besu_synchronizer_in_sync{chain=~\"$chain\"}, \"job\", \"besu\", \"\", \"\")",
-          "format": "table",
-          "instant": true,
-          "refId": "B"
-        },
-        {
-          "expr": "label_replace(ethereum_best_known_block_number{chain=~\"$chain\"} - on(instance,chain) ethereum_blockchain_height{chain=~\"$chain\"}, \"job\", \"besu\", \"\", \"\")",
-          "format": "table",
-          "instant": true,
-          "refId": "C"
-        },
-        {
-          "expr": "label_replace(1 - beacon_is_syncing{chain=~\"$chain\"}, \"job\", \"$1\", \"job\", \"(.*)\")",
-          "format": "table",
-          "instant": true,
-          "refId": "D"
-        },
-        {
-          "expr": "label_replace(beacon_slot{chain=~\"$chain\"} - on(instance,chain) beacon_head_slot{chain=~\"$chain\"}, \"job\", \"$1\", \"job\", \"(.*)\")",
-          "format": "table",
-          "instant": true,
-          "refId": "E"
-        },
-        {
-          "expr": "label_replace(1 - avalanche_c_chain_syncing{chain=~\"$chain\"}, \"job\", \"avalanchego\", \"\", \"\")",
-          "format": "table",
-          "instant": true,
-          "refId": "F"
-        },
-        {
-          "expr": "label_replace(avalanche_c_chain_blocks_behind{chain=~\"$chain\"}, \"job\", \"avalanchego\", \"\", \"\")",
-          "format": "table",
-          "instant": true,
-          "refId": "G"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto",
-            "inspect": false,
-            "width": "auto"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "__name__"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #A (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Status"
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Down",
-                        "color": "red"
-                      },
-                      "1": {
-                        "text": "Up",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #B (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Exec Synced"
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Syncing",
-                        "color": "yellow"
-                      },
-                      "1": {
-                        "text": "Synced",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #C (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Blocks Behind"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 100,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1000,
-                      "color": "red"
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #D (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Beacon Synced"
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Synced",
-                        "color": "green"
-                      },
-                      "1": {
-                        "text": "Syncing",
-                        "color": "yellow"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #E (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Slots Behind"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 32,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 225,
-                      "color": "red"
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #F (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Avax Synced"
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Syncing",
-                        "color": "yellow"
-                      },
-                      "1": {
-                        "text": "Synced",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value #G (lastNotNull)"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Avax Blocks Behind"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 100,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1000,
-                      "color": "red"
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.displayMode",
-                "value": "color-background"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "instance"
-          }
-        ],
-        "cellHeight": "sm"
-      },
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "instance": {
-                "operation": "groupby",
-                "aggregations": []
-              },
-              "job": {
-                "operation": "groupby",
-                "aggregations": []
-              },
-              "chain": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #A": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #B": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #C": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #D": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #E": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #F": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              },
-              "Value #G": {
-                "operation": "aggregate",
-                "aggregations": ["lastNotNull"]
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true
-            },
-            "renameByName": {
-              "chain (lastNotNull)": "chain",
-              "Value #A (lastNotNull)": "Status",
-              "Value #B (lastNotNull)": "Exec Synced",
-              "Value #C (lastNotNull)": "Blocks Behind",
-              "Value #D (lastNotNull)": "Beacon Synced",
-              "Value #E (lastNotNull)": "Slots Behind",
-              "Value #F (lastNotNull)": "Avax Synced",
-              "Value #G (lastNotNull)": "Avax Blocks Behind"
-            },
-            "indexByName": {
-              "instance": 0,
-              "job": 1,
-              "chain (lastNotNull)": 2,
-              "Value #A (lastNotNull)": 3,
-              "Value #B (lastNotNull)": 4,
-              "Value #C (lastNotNull)": 5,
-              "Value #D (lastNotNull)": 6,
-              "Value #E (lastNotNull)": 7,
-              "Value #F (lastNotNull)": 8,
-              "Value #G (lastNotNull)": 9
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "title": "CPU Usage - Average",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 28
-      },
-      "targets": [
-        {
-          "expr": "avg(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
-          "legendFormat": "Average",
-          "refId": "A"
-        },
-        {
-          "expr": "max(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
-          "legendFormat": "Max",
-          "refId": "B"
-        },
-        {
-          "expr": "min(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=~\"$chain\",instance=~\"$instance\"}[5m])) * 100))",
-          "legendFormat": "Min",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 80,
-                "color": "yellow"
-              },
-              {
-                "value": 90,
-                "color": "red"
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
-        "legend": {
-          "calcs": ["mean", "max", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        }
-      }
-    },
-    {
       "id": 4,
       "title": "CPU Usage by Instance",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 28
+        "x": 0,
+        "y": 14
       },
       "targets": [
         {
@@ -1096,111 +456,18 @@
       }
     },
     {
-      "id": 5,
-      "title": "Memory Available - Average",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 36
-      },
-      "targets": [
-        {
-          "expr": "avg((node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
-          "legendFormat": "Average",
-          "refId": "A"
-        },
-        {
-          "expr": "min((node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
-          "legendFormat": "Min",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "red"
-              },
-              {
-                "value": 20,
-                "color": "yellow"
-              },
-              {
-                "value": 50,
-                "color": "green"
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
-        "legend": {
-          "calcs": ["mean", "min", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        }
-      }
-    },
-    {
       "id": 6,
-      "title": "Memory Available by Instance",
+      "title": "Memory Usage by Instance",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 14
       },
       "targets": [
         {
-          "expr": "(node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100",
+          "expr": "100 - ((node_memory_MemAvailable_bytes{chain=~\"$chain\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -1248,15 +515,15 @@
             "steps": [
               {
                 "value": null,
-                "color": "red"
+                "color": "green"
               },
               {
-                "value": 20,
+                "value": 80,
                 "color": "yellow"
               },
               {
-                "value": 50,
-                "color": "green"
+                "value": 90,
+                "color": "red"
               }
             ]
           },
@@ -1269,7 +536,7 @@
           "sort": "desc"
         },
         "legend": {
-          "calcs": ["mean", "min", "lastNotNull"],
+          "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true,
@@ -1279,17 +546,17 @@
     },
     {
       "id": 7,
-      "title": "Disk Usage - Top 10 by Usage",
+      "title": "Disk Usage by Instance",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 22
       },
       "targets": [
         {
-          "expr": "topk(10, 100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
+          "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100)",
           "legendFormat": "{{instance}}:{{mountpoint}}",
           "refId": "A"
         }
@@ -1367,25 +634,203 @@
       }
     },
     {
-      "id": 8,
-      "title": "Disk Usage - Summary",
+      "id": 9,
+      "title": "Disk I/O by Instance",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 22
       },
       "targets": [
         {
-          "expr": "avg(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
-          "legendFormat": "Average",
+          "expr": "rate(node_disk_read_bytes_total{chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} read",
           "refId": "A"
         },
         {
-          "expr": "max(100 - ((node_filesystem_avail_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=~\"$mountpoint\",chain=~\"$chain\",instance=~\"$instance\"}) * 100))",
-          "legendFormat": "Max",
+          "expr": "-rate(node_disk_written_bytes_total{chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} write",
           "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "Bps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "maxHeight": 150
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Network Traffic by Instance",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} rx",
+          "refId": "A"
+        },
+        {
+          "expr": "-rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} tx",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "Bps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "maxHeight": 150
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Network Errors by Instance",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_errs_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} rx errors",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_network_transmit_errs_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} tx errors",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(node_network_receive_drop_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} rx drops",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(node_network_transmit_drop_total{device!~\"lo|docker.*|br-.*|veth.*\",chain=~\"$chain\",instance=~\"$instance\"}[5m])",
+          "legendFormat": "{{instance}} tx drops",
+          "refId": "D"
         }
       ],
       "fieldConfig": {
@@ -1408,7 +853,7 @@
               "legend": false
             },
             "lineInterpolation": "linear",
-            "lineWidth": 2,
+            "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
@@ -1424,7 +869,6 @@
             }
           },
           "mappings": [],
-          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -1434,16 +878,16 @@
                 "color": "green"
               },
               {
-                "value": 80,
+                "value": 1,
                 "color": "yellow"
               },
               {
-                "value": 90,
+                "value": 10,
                 "color": "red"
               }
             ]
           },
-          "unit": "percent"
+          "unit": "pps"
         }
       },
       "options": {
@@ -1455,7 +899,8 @@
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "maxHeight": 150
         }
       }
     }
