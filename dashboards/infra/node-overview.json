@@ -172,7 +172,7 @@
     },
     {
       "id": 10,
-      "title": "Execution Sync Status",
+      "title": "Ethereum Sync Status",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -224,6 +224,129 @@
                     {
                       "value": null,
                       "color": "red"
+                    },
+                    {
+                      "value": 1,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Synced",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Blocks Behind"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Avalanche Sync Status",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "avalanche_c_chain_syncing{chain=~\"$chain\"} == 0",
+          "legendFormat": "Synced",
+          "refId": "A"
+        },
+        {
+          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\"}",
+          "legendFormat": "Blocks Behind",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "N/A"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Synced"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "yellow"
                     },
                     {
                       "value": 1,
@@ -452,7 +575,7 @@
       },
       "targets": [
         {
-          "expr": "up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon|teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|teku_validator|lighthouse_validator|prysm_validator|nimbus_validator\"}",
+          "expr": "up{chain=~\"$chain\",job=~\"besu|geth|nethermind|erigon|teku_beacon|lighthouse_beacon|prysm_beacon|nimbus_beacon|teku_validator|lighthouse_validator|prysm_validator|nimbus_validator|avalanchego|avalanche_collector\"}",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -480,6 +603,18 @@
           "format": "table",
           "instant": true,
           "refId": "E"
+        },
+        {
+          "expr": "label_replace(1 - avalanche_c_chain_syncing{chain=~\"$chain\"}, \"job\", \"avalanchego\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "label_replace(avalanche_c_chain_blocks_behind{chain=~\"$chain\"}, \"job\", \"avalanchego\", \"\", \"\")",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
         }
       ],
       "fieldConfig": {
@@ -689,6 +824,76 @@
                 "value": "color-background"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #F (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Avax Synced"
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Syncing",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Synced",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value #G (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Avax Blocks Behind"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 100,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
           }
         ]
       },
@@ -742,6 +947,14 @@
               "Value #E": {
                 "operation": "aggregate",
                 "aggregations": ["lastNotNull"]
+              },
+              "Value #F": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
+              },
+              "Value #G": {
+                "operation": "aggregate",
+                "aggregations": ["lastNotNull"]
               }
             }
           }
@@ -759,7 +972,9 @@
               "Value #B (lastNotNull)": "Exec Synced",
               "Value #C (lastNotNull)": "Blocks Behind",
               "Value #D (lastNotNull)": "Beacon Synced",
-              "Value #E (lastNotNull)": "Slots Behind"
+              "Value #E (lastNotNull)": "Slots Behind",
+              "Value #F (lastNotNull)": "Avax Synced",
+              "Value #G (lastNotNull)": "Avax Blocks Behind"
             },
             "indexByName": {
               "instance": 0,
@@ -769,7 +984,9 @@
               "Value #B (lastNotNull)": 4,
               "Value #C (lastNotNull)": 5,
               "Value #D (lastNotNull)": 6,
-              "Value #E (lastNotNull)": 7
+              "Value #E (lastNotNull)": 7,
+              "Value #F (lastNotNull)": 8,
+              "Value #G (lastNotNull)": 9
             }
           }
         }
