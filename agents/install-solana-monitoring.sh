@@ -471,7 +471,7 @@ serve_metrics() {
         {
             echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\n"
             cat "$METRICS_FILE" 2>/dev/null || echo "# No metrics available yet"
-        } | nc -l -p "$LISTEN_PORT" -q 1 2>/dev/null || true
+        } | nc -l "$LISTEN_PORT" -q 1 2>/dev/null || nc -l -p "$LISTEN_PORT" -q 1 2>/dev/null || true
     done
 }
 
