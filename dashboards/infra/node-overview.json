@@ -24,19 +24,19 @@
           "refId": "A"
         },
         {
-          "expr": "avalanche_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
+          "expr": "avalanche_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
           "format": "table",
           "instant": true,
           "refId": "B"
         },
         {
-          "expr": "(1 - avalanche_c_chain_syncing{chain=~\"$chain\",instance=~\"$instance\"}) or solana_node_synced{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
+          "expr": "(1 - avalanche_c_chain_syncing{chain=~\"$chain\",instance=~\"$instance\"}) or solana_node_synced{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_synced{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
           "format": "table",
           "instant": true,
           "refId": "C"
         },
         {
-          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_slots_behind{chain=~\"$chain\",instance=~\"$instance\"} or (ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"})",
+          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_slots_behind{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_rounds_behind{chain=~\"$chain\",instance=~\"$instance\"} or (ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "D"
@@ -306,6 +306,11 @@
           "expr": "solana_node_slots_behind{chain=~\"$chain\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Solana)",
           "refId": "C"
+        },
+        {
+          "expr": "algorand_node_rounds_behind{chain=~\"$chain\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} (Algorand)",
+          "refId": "D"
         }
       ],
       "fieldConfig": {
