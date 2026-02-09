@@ -444,6 +444,53 @@ solana_network_peers ${peer_count}
 EOF
 
     # =========================================================================
+    # Vote Latency (for validators)
+    # =========================================================================
+    local vote_latency_ms=0
+    local last_vote_slot=0
+
+    # Get vote latency by comparing last vote slot with current slot
+    if [[ "$is_validator" -eq 1 ]] && command -v solana >/dev/null 2>&1; then
+        # Try to get vote account info
+        local vote_info
+        vote_info=$(solana vote-account --url "${SOLANA_RPC}" "${identity}" 2>/dev/null || echo "")
+        if echo "$vote_info" | grep -q "Last Timestamp Slot"; then
+            last_vote_slot=$(echo "$vote_info" | grep "Last Timestamp Slot" | grep -o '[0-9]*' | head -1 || echo "0")
+            if [[ "$last_vote_slot" -gt 0 ]] && [[ "$current_slot" -gt 0 ]]; then
+                local slot_diff=$((current_slot - last_vote_slot))
+                # Each slot is approximately 400ms
+                vote_latency_ms=$((slot_diff * 400))
+            fi
+        fi
+    fi
+
+    cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP solana_vote_latency_ms Vote latency in milliseconds (slots behind * 400ms)
+# TYPE solana_vote_latency_ms gauge
+solana_vote_latency_ms ${vote_latency_ms}
+
+# HELP solana_last_vote_slot Last vote slot for this validator
+# TYPE solana_last_vote_slot gauge
+solana_last_vote_slot ${last_vote_slot}
+
+EOF
+
+    # =========================================================================
+    # Epoch Progress
+    # =========================================================================
+    local epoch_progress_pct=0
+    if [[ "$slots_in_epoch" -gt 0 ]]; then
+        epoch_progress_pct=$(echo "scale=2; $slot_index * 100 / $slots_in_epoch" | bc 2>/dev/null || echo "0")
+    fi
+
+    cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP solana_epoch_progress_percent Epoch progress percentage
+# TYPE solana_epoch_progress_percent gauge
+solana_epoch_progress_percent ${epoch_progress_pct}
+
+EOF
+
+    # =========================================================================
     # Transaction Count
     # =========================================================================
     local tx_count_response

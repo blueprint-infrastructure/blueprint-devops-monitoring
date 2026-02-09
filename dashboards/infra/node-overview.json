@@ -395,7 +395,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"} or algod_network_peers{chain=~\"$chain\"})",
+          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"} or algorand_network_peers{chain=~\"$chain\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -407,7 +407,7 @@
           "refId": "B"
         },
         {
-          "expr": "max by (chain) (ethereum_blockchain_height{chain=~\"$chain\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\", exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\"} or algod_ledger_round{chain=~\"$chain\"})",
+          "expr": "max by (chain) (ethereum_blockchain_height{chain=~\"$chain\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\", exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\"} or algorand_node_last_round{chain=~\"$chain\"})",
           "format": "table",
           "instant": true,
           "refId": "C"
