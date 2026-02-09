@@ -475,6 +475,21 @@
                 }
               },
               {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
@@ -507,6 +522,21 @@
                 "value": {
                   "type": "color-text"
                 }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
               },
               {
                 "id": "thresholds",
@@ -564,6 +594,21 @@
                 }
               },
               {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
@@ -583,6 +628,21 @@
                 "value": {
                   "type": "color-text"
                 }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
               },
               {
                 "id": "color",
