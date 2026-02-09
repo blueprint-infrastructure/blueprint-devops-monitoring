@@ -402,14 +402,27 @@ EOF
     # =========================================================================
     # Network Peers
     # =========================================================================
-    local cluster_nodes_response
-    cluster_nodes_response=$(rpc_call "getClusterNodes")
-
     local peer_count=0
-    if echo "$cluster_nodes_response" | grep -q '"pubkey"'; then
-        peer_count=$(echo "$cluster_nodes_response" | grep -o '"pubkey"' | wc -l || echo "0")
-        # Subtract 1 for self
-        peer_count=$((peer_count > 0 ? peer_count - 1 : 0))
+
+    # Method 1: Try solana gossip command (most reliable)
+    if command -v solana >/dev/null 2>&1; then
+        local gossip_output
+        gossip_output=$(timeout 30 solana gossip --url "${SOLANA_RPC}" 2>/dev/null | wc -l || echo "0")
+        if [[ "$gossip_output" -gt 1 ]]; then
+            # Subtract header line
+            peer_count=$((gossip_output - 1))
+        fi
+    fi
+
+    # Method 2: Fallback to getClusterNodes RPC
+    if [[ "$peer_count" -eq 0 ]]; then
+        local cluster_nodes_response
+        cluster_nodes_response=$(rpc_call "getClusterNodes")
+        if echo "$cluster_nodes_response" | grep -q '"pubkey"'; then
+            peer_count=$(echo "$cluster_nodes_response" | grep -o '"pubkey"' | wc -l || echo "0")
+            # Subtract 1 for self
+            peer_count=$((peer_count > 0 ? peer_count - 1 : 0))
+        fi
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF
