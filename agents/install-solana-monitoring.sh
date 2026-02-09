@@ -343,7 +343,24 @@ EOF
     # =========================================================================
 
     local identity=""
-    if command -v solana >/dev/null 2>&1; then
+
+    # Try to find validator identity keypair in common locations
+    local identity_keypair=""
+    for keypair_path in \
+        "/home/firedancer/validator-keypair.json" \
+        "/home/sol/validator-keypair.json" \
+        "/var/lib/solana/validator-keypair.json" \
+        "/root/validator-keypair.json"; do
+        if [[ -f "$keypair_path" ]]; then
+            identity_keypair="$keypair_path"
+            break
+        fi
+    done
+
+    # Get identity pubkey
+    if [[ -n "$identity_keypair" ]] && command -v solana-keygen >/dev/null 2>&1; then
+        identity=$(solana-keygen pubkey "$identity_keypair" 2>/dev/null || echo "")
+    elif command -v solana >/dev/null 2>&1; then
         identity=$(solana address 2>/dev/null || echo "")
     fi
 
@@ -370,15 +387,21 @@ EOF
                 is_delinquent=1
             fi
 
-            # Extract stake (this is simplified - actual parsing would need jq)
-            # For now, we'll use solana CLI if available
+            # Extract stake using solana validators command (most reliable)
+            # Use public mainnet RPC to query validator info
             if command -v solana >/dev/null 2>&1; then
-                local stakes_output
-                stakes_output=$(solana stakes --url "${SOLANA_RPC}" "${identity}" 2>/dev/null || echo "")
-                if echo "$stakes_output" | grep -q "Active Stake"; then
-                    activated_stake=$(echo "$stakes_output" | grep "Active Stake" | head -1 | grep -o '[0-9.]*' | head -1 || echo "0")
+                local validators_output
+                validators_output=$(timeout 30 solana validators --url https://api.mainnet-beta.solana.com 2>/dev/null | grep "${identity}" || echo "")
+                if [[ -n "$validators_output" ]]; then
+                    # Parse stake from validators output (last column before SOL, format: "343825.970070064 SOL")
+                    # Output format: identity vote_account commission skip% credits credits version stake
+                    activated_stake=$(echo "$validators_output" | awk '{for(i=1;i<=NF;i++) if($i=="SOL") print $(i-1)}' | head -1 || echo "0")
                     # Convert SOL to lamports (1 SOL = 1e9 lamports)
-                    activated_stake=$(echo "$activated_stake * 1000000000" | bc 2>/dev/null || echo "0")
+                    if [[ -n "$activated_stake" ]] && [[ "$activated_stake" != "0" ]]; then
+                        activated_stake=$(echo "$activated_stake * 1000000000" | bc 2>/dev/null || echo "0")
+                        # Remove decimal part if any
+                        activated_stake=${activated_stake%%.*}
+                    fi
                 fi
             fi
         fi
