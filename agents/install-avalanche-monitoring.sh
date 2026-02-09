@@ -424,6 +424,27 @@ avalanche_uptime_weighted_avg_percent ${weighted_avg_pct}
 EOF
 
     # =========================================================================
+    # Version Info
+    # =========================================================================
+    local version_response
+    version_response=$(curl -s --max-time 5 -X POST \
+        --data '{"jsonrpc":"2.0","method":"info.getNodeVersion","params":[],"id":1}' \
+        -H 'content-type:application/json;' "${AVALANCHE_RPC}/ext/info" 2>/dev/null || echo '{}')
+
+    local node_version="unknown"
+    if echo "$version_response" | grep -q '"version"'; then
+        # Extract version like "avalanche/1.11.3"
+        node_version=$(echo "$version_response" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | sed 's/avalanche\///' || echo "unknown")
+    fi
+
+    cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP avalanche_node_version_info Avalanche node version
+# TYPE avalanche_node_version_info gauge
+avalanche_node_version_info{version="${node_version}"} 1
+
+EOF
+
+    # =========================================================================
     # Collector metadata
     # =========================================================================
     local scrape_success=1

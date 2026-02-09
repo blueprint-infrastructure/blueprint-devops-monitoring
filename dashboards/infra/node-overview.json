@@ -40,6 +40,12 @@
           "format": "table",
           "instant": true,
           "refId": "D"
+        },
+        {
+          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(besu_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(teku_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
         }
       ],
       "fieldConfig": {
@@ -253,6 +259,10 @@
               "Value #D": {
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
+              },
+              "node_version": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
               }
             }
           }
@@ -261,7 +271,8 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "Value #E (lastNotNull)": true
             },
             "indexByName": {
               "instance": 0,
@@ -269,13 +280,15 @@
               "Value #A (lastNotNull)": 2,
               "Value #B (lastNotNull)": 3,
               "Value #C (lastNotNull)": 4,
-              "Value #D (lastNotNull)": 5
+              "Value #D (lastNotNull)": 5,
+              "node_version (lastNotNull)": 6
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
-              "Value #D (lastNotNull)": "Blocks Behind"
+              "Value #D (lastNotNull)": "Blocks Behind",
+              "node_version (lastNotNull)": "Version"
             }
           }
         }
