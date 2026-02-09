@@ -385,258 +385,291 @@
     },
     {
       "id": 15,
-      "title": "Peer Count",
-      "type": "stat",
+      "title": "Chain Metrics Overview",
+      "type": "table",
       "gridPos": {
-        "h": 5,
-        "w": 12,
+        "h": 8,
+        "w": 24,
         "x": 0,
         "y": 18
       },
       "targets": [
         {
-          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
+          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"} or algod_network_peers{chain=~\"$chain\"})",
+          "format": "table",
+          "instant": true,
           "refId": "A"
         },
         {
-          "expr": "sum by (chain) (avalanche_network_peers{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
+          "expr": "sum by (chain) (beacon_peer_count{chain=~\"$chain\"})",
+          "format": "table",
+          "instant": true,
           "refId": "B"
         },
         {
-          "expr": "sum by (chain) (solana_network_peers{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
+          "expr": "max by (chain) (ethereum_blockchain_height{chain=~\"$chain\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\", exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\"} or algod_ledger_round{chain=~\"$chain\"})",
+          "format": "table",
+          "instant": true,
           "refId": "C"
         },
         {
-          "expr": "sum by (chain) (algod_network_peers{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
+          "expr": "max by (chain) (beacon_current_epoch{chain=~\"$chain\"} or solana_node_epoch{chain=~\"$chain\"})",
+          "format": "table",
+          "instant": true,
           "refId": "D"
         },
         {
-          "expr": "sum by (chain) (beacon_peer_count{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}} (beacon)",
+          "expr": "sum by (chain) (solana_validator_activated_stake_lamports{chain=~\"$chain\"} / 1e9 or avalanche_platformvm_local_staked{chain=~\"$chain\"} / 1e9 or validator_local_validator_balances{chain=~\"$chain\"} / 1e9)",
+          "format": "table",
+          "instant": true,
           "refId": "E"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
+          "custom": {
+            "align": "center",
+            "displayMode": "auto",
+            "inspect": false,
+            "width": "auto"
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          "decimals": 0,
+          "unit": "locale"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
               {
-                "value": null,
-                "color": "red"
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Chain"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Peer Count"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
               },
               {
-                "value": 10,
-                "color": "yellow"
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 10,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 50,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Beacon Peers"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
               },
               {
-                "value": 50,
-                "color": "green"
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 10,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 50,
+                      "color": "green"
+                    }
+                  ]
+                }
               }
             ]
           },
-          "unit": "short"
-        }
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 16,
-      "title": "Validator Stake",
-      "type": "stat",
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 18
-      },
-      "targets": [
-        {
-          "expr": "sum by (chain) (solana_identity_balance_sol{chain=~\"$chain\"} + solana_vote_balance_sol{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}} SOL",
-          "refId": "A"
-        },
-        {
-          "expr": "sum by (chain) (avalanche_platformvm_local_staked{chain=~\"$chain\"}) / 1e9",
-          "legendFormat": "{{chain}} AVAX",
-          "refId": "B"
-        },
-        {
-          "expr": "sum by (chain) (validator_local_validator_balances{chain=~\"$chain\"}) / 1e9",
-          "legendFormat": "{{chain}} ETH",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Block Height"
+            },
+            "properties": [
               {
-                "value": null,
-                "color": "blue"
-              }
-            ]
-          },
-          "unit": "short",
-          "decimals": 0
-        }
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 17,
-      "title": "Block Height",
-      "type": "stat",
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 0,
-        "y": 23
-      },
-      "targets": [
-        {
-          "expr": "max by (chain) (ethereum_blockchain_height{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
-          "refId": "A"
-        },
-        {
-          "expr": "max by (chain) (avalanche_C_blks_accepted_count{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
-          "refId": "B"
-        },
-        {
-          "expr": "max by (chain) (solana_node_block_height{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
-          "refId": "C"
-        },
-        {
-          "expr": "max by (chain) (algod_ledger_round{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
-          "refId": "D"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
               {
-                "value": null,
-                "color": "blue"
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
               }
             ]
           },
-          "unit": "short",
-          "decimals": 0
-        }
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 18,
-      "title": "Current Epoch",
-      "type": "stat",
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 23
-      },
-      "targets": [
-        {
-          "expr": "max by (chain) (beacon_current_epoch{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}} (beacon)",
-          "refId": "A"
-        },
-        {
-          "expr": "max by (chain) (solana_node_epoch{chain=~\"$chain\"})",
-          "legendFormat": "{{chain}}",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Current Epoch"
+            },
+            "properties": [
               {
-                "value": null,
-                "color": "purple"
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
               }
             ]
           },
-          "unit": "short",
-          "decimals": 0
-        }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Validator Stake"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Chain"
+          }
+        ],
+        "cellHeight": "md",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
         },
-        "textMode": "auto"
-      }
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "chain": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "Value #A": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #B": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #C": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #D": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #E": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "chain": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5
+            },
+            "renameByName": {
+              "chain": "Chain",
+              "Value #A (lastNotNull)": "Peer Count",
+              "Value #B (lastNotNull)": "Beacon Peers",
+              "Value #C (lastNotNull)": "Block Height",
+              "Value #D (lastNotNull)": "Current Epoch",
+              "Value #E (lastNotNull)": "Validator Stake"
+            }
+          }
+        }
+      ]
     },
     {
       "id": 4,
@@ -646,7 +679,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 26
       },
       "targets": [
         {
@@ -735,7 +768,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 26
       },
       "targets": [
         {
@@ -824,7 +857,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 34
       },
       "targets": [
         {
@@ -913,7 +946,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 34
       },
       "targets": [
         {
@@ -997,7 +1030,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 42
       },
       "targets": [
         {
@@ -1081,7 +1114,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 42
       },
       "targets": [
         {

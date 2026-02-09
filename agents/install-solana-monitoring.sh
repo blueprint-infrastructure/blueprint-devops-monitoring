@@ -404,17 +404,19 @@ EOF
     # =========================================================================
     local peer_count=0
 
-    # Method 1: Try solana gossip command (most reliable)
+    # Method 1: Try solana gossip command (works on validator nodes)
     if command -v solana >/dev/null 2>&1; then
         local gossip_output
-        gossip_output=$(timeout 30 solana gossip --url "${SOLANA_RPC}" 2>/dev/null | wc -l || echo "0")
-        if [[ "$gossip_output" -gt 1 ]]; then
+        # Note: solana gossip uses gossip port directly, not RPC URL
+        gossip_output=$(timeout 30 solana gossip 2>/dev/null | wc -l | tr -d ' \n' || echo "0")
+        gossip_output=${gossip_output:-0}
+        if [[ "$gossip_output" =~ ^[0-9]+$ ]] && [[ "$gossip_output" -gt 1 ]]; then
             # Subtract header line
             peer_count=$((gossip_output - 1))
         fi
     fi
 
-    # Method 2: Fallback to getClusterNodes RPC
+    # Method 2: Try getClusterNodes RPC
     if [[ "$peer_count" -eq 0 ]]; then
         local cluster_nodes_response
         cluster_nodes_response=$(rpc_call "getClusterNodes")
@@ -422,6 +424,15 @@ EOF
             peer_count=$(echo "$cluster_nodes_response" | grep -o '"pubkey"' | wc -l || echo "0")
             # Subtract 1 for self
             peer_count=$((peer_count > 0 ? peer_count - 1 : 0))
+        fi
+    fi
+
+    # Method 3: Use getVoteAccounts to count active validators (RPC fallback)
+    if [[ "$peer_count" -eq 0 ]]; then
+        local vote_accounts_response
+        vote_accounts_response=$(rpc_call "getVoteAccounts")
+        if echo "$vote_accounts_response" | grep -q '"votePubkey"'; then
+            peer_count=$(echo "$vote_accounts_response" | grep -o '"votePubkey"' | wc -l || echo "0")
         fi
     fi
 
