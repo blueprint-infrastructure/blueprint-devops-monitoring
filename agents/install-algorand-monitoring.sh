@@ -400,26 +400,18 @@ EOF
     # =========================================================================
     local peer_count=0
 
-    # Try to get peer count from status endpoint
-    if echo "$status_response" | grep -q '"catchpoint-acquired-blocks"'; then
-        # Node is catching up, try to get peers from goal
-        :
+    # Method 1: Count established connections on Algorand P2P ports (4160, 4161)
+    # This is the most reliable method as Algorand API doesn't expose peer count
+    if command -v ss >/dev/null 2>&1; then
+        peer_count=$(ss -tn 2>/dev/null | grep -E ":4160|:4161" | wc -l | tr -d ' ')
+    elif command -v netstat >/dev/null 2>&1; then
+        peer_count=$(netstat -an 2>/dev/null | grep -E ":(4160|4161)" | grep ESTABLISHED | wc -l | tr -d ' ')
     fi
 
-    # Method 1: Use goal node status to get peer info
-    if command -v goal >/dev/null 2>&1 && [[ -d "$ALGORAND_DATA" ]]; then
-        local goal_status
-        goal_status=$(goal node status -d "$ALGORAND_DATA" 2>/dev/null || echo "")
-        if echo "$goal_status" | grep -qi "connected peers"; then
-            peer_count=$(echo "$goal_status" | grep -i "connected peers" | grep -o '[0-9]*' | head -1 || echo "0")
-        fi
-    fi
-
-    # Method 2: Try algod admin API for peers (requires admin token)
-    if [[ "$peer_count" -eq 0 ]] && [[ -n "$ALGORAND_TOKEN" ]]; then
-        local peers_response
-        peers_response=$(curl -s --max-time 5 -H "X-Algo-API-Token: ${ALGORAND_TOKEN}" "${ALGORAND_API}/v2/status" 2>/dev/null || echo "{}")
-        # Note: Standard API doesn't expose peer count directly
+    # Ensure peer_count is a valid number
+    peer_count=${peer_count:-0}
+    if ! [[ "$peer_count" =~ ^[0-9]+$ ]]; then
+        peer_count=0
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF

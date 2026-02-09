@@ -395,7 +395,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"} or algorand_network_peers{chain=~\"$chain\"})",
+          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"})",
           "format": "table",
           "instant": true,
           "refId": "A"
@@ -434,7 +434,8 @@
             "width": "auto"
           },
           "decimals": 0,
-          "unit": "locale"
+          "unit": "locale",
+          "noValue": "N/A"
         },
         "overrides": [
           {
