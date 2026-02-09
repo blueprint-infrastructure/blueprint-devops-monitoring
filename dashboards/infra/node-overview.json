@@ -46,6 +46,30 @@
           "format": "table",
           "instant": true,
           "refId": "E"
+        },
+        {
+          "expr": "ethereum_peer_count{chain=~\"$chain\",instance=~\"$instance\"} or besu_peers_connected_total{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_network_peers{chain=~\"$chain\",instance=~\"$instance\"} or solana_network_peers{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\",instance=~\"$instance\",exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_last_round{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "expr": "beacon_current_epoch{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_epoch{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "solana_validator_activated_stake_lamports{chain=~\"$chain\",instance=~\"$instance\"} / 1e9 or avalanche_platformvm_local_staked{chain=~\"$chain\",instance=~\"$instance\"} / 1e9 or validator_local_validator_balances{chain=~\"$chain\",instance=~\"$instance\"} / 1e9",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
         }
       ],
       "fieldConfig": {
@@ -209,6 +233,142 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Peer Count"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Block Height"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Current Epoch"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Validator Stake"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
           }
         ]
       },
@@ -263,6 +423,22 @@
               "node_version": {
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
+              },
+              "Value #F": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #G": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #H": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
+              },
+              "Value #I": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
               }
             }
           }
@@ -281,14 +457,22 @@
               "Value #B (lastNotNull)": 3,
               "Value #C (lastNotNull)": 4,
               "Value #D (lastNotNull)": 5,
-              "node_version (lastNotNull)": 6
+              "node_version (lastNotNull)": 6,
+              "Value #F (lastNotNull)": 7,
+              "Value #G (lastNotNull)": 8,
+              "Value #H (lastNotNull)": 9,
+              "Value #I (lastNotNull)": 10
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
               "Value #D (lastNotNull)": "Blocks Behind",
-              "node_version (lastNotNull)": "Version"
+              "node_version (lastNotNull)": "Version",
+              "Value #F (lastNotNull)": "Peer Count",
+              "Value #G (lastNotNull)": "Block Height",
+              "Value #H (lastNotNull)": "Current Epoch",
+              "Value #I (lastNotNull)": "Validator Stake"
             }
           }
         }
@@ -397,355 +581,6 @@
       }
     },
     {
-      "id": 15,
-      "title": "Chain Metrics Overview",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 18
-      },
-      "targets": [
-        {
-          "expr": "sum by (chain) (ethereum_peer_count{chain=~\"$chain\"} or besu_peers_connected_total{chain=~\"$chain\"} or avalanche_network_peers{chain=~\"$chain\"} or solana_network_peers{chain=~\"$chain\"})",
-          "format": "table",
-          "instant": true,
-          "refId": "A"
-        },
-        {
-          "expr": "sum by (chain) (beacon_peer_count{chain=~\"$chain\"})",
-          "format": "table",
-          "instant": true,
-          "refId": "B"
-        },
-        {
-          "expr": "max by (chain) (ethereum_blockchain_height{chain=~\"$chain\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\", exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\"} or algorand_node_last_round{chain=~\"$chain\"})",
-          "format": "table",
-          "instant": true,
-          "refId": "C"
-        },
-        {
-          "expr": "max by (chain) (beacon_current_epoch{chain=~\"$chain\"} or solana_node_epoch{chain=~\"$chain\"})",
-          "format": "table",
-          "instant": true,
-          "refId": "D"
-        },
-        {
-          "expr": "sum by (chain) (solana_validator_activated_stake_lamports{chain=~\"$chain\"} / 1e9 or avalanche_platformvm_local_staked{chain=~\"$chain\"} / 1e9 or validator_local_validator_balances{chain=~\"$chain\"} / 1e9)",
-          "format": "table",
-          "instant": true,
-          "refId": "E"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "center",
-            "displayMode": "auto",
-            "inspect": false,
-            "width": "auto"
-          },
-          "decimals": 0,
-          "unit": "locale",
-          "noValue": "N/A"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Chain"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Peer Count"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "red"
-                    },
-                    {
-                      "value": 10,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 50,
-                      "color": "green"
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Beacon Peers"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "red"
-                    },
-                    {
-                      "value": 10,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 50,
-                      "color": "green"
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Block Height"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Current Epoch"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "purple"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Validator Stake"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "Chain"
-          }
-        ],
-        "cellHeight": "md",
-        "footer": {
-          "show": false,
-          "reducer": ["sum"],
-          "countRows": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "chain": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "Value #A": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #B": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #C": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #D": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #E": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "indexByName": {
-              "chain": 0,
-              "Value #A (lastNotNull)": 1,
-              "Value #B (lastNotNull)": 2,
-              "Value #C (lastNotNull)": 3,
-              "Value #D (lastNotNull)": 4,
-              "Value #E (lastNotNull)": 5
-            },
-            "renameByName": {
-              "chain": "Chain",
-              "Value #A (lastNotNull)": "Peer Count",
-              "Value #B (lastNotNull)": "Beacon Peers",
-              "Value #C (lastNotNull)": "Block Height",
-              "Value #D (lastNotNull)": "Current Epoch",
-              "Value #E (lastNotNull)": "Validator Stake"
-            }
-          }
-        }
-      ]
-    },
-    {
       "id": 4,
       "title": "CPU Usage by Instance",
       "type": "timeseries",
@@ -753,7 +588,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 18
       },
       "targets": [
         {
@@ -842,7 +677,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 18
       },
       "targets": [
         {
@@ -931,7 +766,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 26
       },
       "targets": [
         {
@@ -1020,7 +855,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 26
       },
       "targets": [
         {
@@ -1104,7 +939,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 34
       },
       "targets": [
         {
@@ -1188,7 +1023,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 42
+        "y": 34
       },
       "targets": [
         {
