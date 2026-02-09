@@ -433,8 +433,8 @@ EOF
 
     local node_version="unknown"
     if echo "$version_response" | grep -q '"version"'; then
-        # Extract version like "avalanche/1.11.3"
-        node_version=$(echo "$version_response" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | sed 's/avalanche\///' || echo "unknown")
+        # Extract version like "avalanchego/1.14.1" and remove prefix
+        node_version=$(echo "$version_response" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | sed 's|.*/||' || echo "unknown")
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF

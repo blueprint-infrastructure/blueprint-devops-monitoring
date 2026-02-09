@@ -42,7 +42,7 @@
           "refId": "D"
         },
         {
-          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(besu_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(teku_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(beacon_teku_version_total{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "E"
