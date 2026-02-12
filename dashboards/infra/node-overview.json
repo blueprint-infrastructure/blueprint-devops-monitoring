@@ -36,13 +36,13 @@
           "refId": "C"
         },
         {
-          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_slots_behind{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_rounds_behind{chain=~\"$chain\",instance=~\"$instance\"} or (ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"})",
+          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(beacon_teku_version_total{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(beacon_teku_version_total{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "label_replace(avalanche_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -54,7 +54,7 @@
           "refId": "F"
         },
         {
-          "expr": "ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_snowman_blks_accepted_count{chain=~\"$chain\",instance=~\"$instance\",exported_chain=\"C\"} or solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_last_round{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_c_chain_block_height{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_last_round{chain=~\"$chain\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "G"
@@ -70,6 +70,12 @@
           "format": "table",
           "instant": true,
           "refId": "I"
+        },
+        {
+          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) * on() group_right() (avalanche_network_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or solana_network_block_height{chain=~\"$chain\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "J"
         }
       ],
       "fieldConfig": {
@@ -202,35 +208,99 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Blocks Behind"
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latest Version"
             },
             "properties": [
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
-                  "mode": "basic"
+                  "type": "color-text"
                 }
               },
               {
-                "id": "thresholds",
+                "id": "color",
                 "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "value": null,
-                      "color": "green"
-                    },
-                    {
-                      "value": 100,
-                      "color": "yellow"
-                    },
-                    {
-                      "value": 1000,
-                      "color": "red"
-                    }
-                  ]
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
                 }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Network Height"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "text": "N/A",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -416,11 +486,11 @@
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
               },
-              "Value #D": {
+              "node_version": {
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
               },
-              "node_version": {
+              "latest_version": {
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
               },
@@ -439,6 +509,10 @@
               "Value #I": {
                 "aggregations": ["lastNotNull"],
                 "operation": "aggregate"
+              },
+              "Value #J": {
+                "aggregations": ["lastNotNull"],
+                "operation": "aggregate"
               }
             }
           }
@@ -448,6 +522,7 @@
           "options": {
             "excludeByName": {
               "Time": true,
+              "Value #D (lastNotNull)": true,
               "Value #E (lastNotNull)": true
             },
             "indexByName": {
@@ -456,21 +531,23 @@
               "Value #A (lastNotNull)": 2,
               "Value #B (lastNotNull)": 3,
               "Value #C (lastNotNull)": 4,
-              "Value #D (lastNotNull)": 5,
-              "node_version (lastNotNull)": 6,
+              "node_version (lastNotNull)": 5,
+              "latest_version (lastNotNull)": 6,
               "Value #F (lastNotNull)": 7,
               "Value #G (lastNotNull)": 8,
-              "Value #H (lastNotNull)": 9,
-              "Value #I (lastNotNull)": 10
+              "Value #J (lastNotNull)": 9,
+              "Value #H (lastNotNull)": 10,
+              "Value #I (lastNotNull)": 11
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
-              "Value #D (lastNotNull)": "Blocks Behind",
               "node_version (lastNotNull)": "Version",
+              "latest_version (lastNotNull)": "Latest Version",
               "Value #F (lastNotNull)": "Peer Count",
               "Value #G (lastNotNull)": "Block Height",
+              "Value #J (lastNotNull)": "Network Height",
               "Value #H (lastNotNull)": "Current Epoch",
               "Value #I (lastNotNull)": "Validator Stake"
             }
@@ -495,7 +572,7 @@
           "refId": "A"
         },
         {
-          "expr": "avalanche_c_chain_blocks_behind{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) - on() group_right() avalanche_c_chain_block_height{chain=~\"$chain\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Avalanche)",
           "refId": "B"
         },
@@ -581,6 +658,90 @@
       }
     },
     {
+      "id": 15,
+      "title": "Avalanche Rewarding Stake %",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "avalanche_uptime_rewarding_stake_percent{chain=~\"$chain\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 80,
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "calcs": ["mean", "min", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
       "id": 4,
       "title": "CPU Usage by Instance",
       "type": "timeseries",
@@ -588,7 +749,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "targets": [
         {
@@ -677,7 +838,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "targets": [
         {
@@ -766,7 +927,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -855,7 +1016,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -939,7 +1100,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 42
       },
       "targets": [
         {
@@ -1023,7 +1184,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 42
       },
       "targets": [
         {

@@ -44,7 +44,7 @@ echo ""
 # =============================================================================
 
 # AMP config (required)
-AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-}"
+AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-ws-fdcbcf55-ed2c-4069-adad-c385e068d992}"
 AMP_REGION="${AMP_REGION:-us-east-1}"
 
 # Avalanche node config
@@ -208,6 +208,53 @@ SCRAPE_INTERVAL="${SCRAPE_INTERVAL:-15}"
 # Metrics file
 METRICS_FILE="/tmp/avalanche_collector_metrics.prom"
 METRICS_FILE_TMP="/tmp/avalanche_collector_metrics.prom.tmp"
+
+# External data cache (refreshed every 5 minutes)
+EXTERNAL_DATA_CACHE="/tmp/avalanche_external_data.cache"
+EXTERNAL_DATA_INTERVAL=300  # 5 minutes
+
+# Cached values
+CACHED_LATEST_VERSION=""
+CACHED_NETWORK_HEIGHT=""
+LAST_EXTERNAL_FETCH=0
+
+# Fetch external data (GitHub latest version, network height)
+fetch_external_data() {
+    local now=$(date +%s)
+    local cache_age=$((now - LAST_EXTERNAL_FETCH))
+
+    # Only fetch if cache is older than EXTERNAL_DATA_INTERVAL
+    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_LATEST_VERSION" ]]; then
+        return 0
+    fi
+
+    # Fetch latest release version from GitHub
+    local github_response
+    github_response=$(curl -s --max-time 10 \
+        -H "Accept: application/vnd.github.v3+json" \
+        "https://api.github.com/repos/ava-labs/avalanchego/releases/latest" 2>/dev/null || echo '{}')
+
+    if echo "$github_response" | grep -q '"tag_name"'; then
+        # Handle both "tag_name":"v1.14.1" and "tag_name": "v1.14.1" formats
+        CACHED_LATEST_VERSION=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "unknown")
+    fi
+
+    # Fetch network block height from public RPC
+    local network_response
+    network_response=$(curl -s --max-time 10 -X POST \
+        --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+        -H 'content-type:application/json;' \
+        "https://api.avax.network/ext/bc/C/rpc" 2>/dev/null || echo '{}')
+
+    if echo "$network_response" | grep -q '"result"'; then
+        local hex_height
+        hex_height=$(echo "$network_response" | grep -o '"result":"[^"]*"' | cut -d'"' -f4 || echo "0x0")
+        # Convert hex to decimal
+        CACHED_NETWORK_HEIGHT=$(printf "%d" "$hex_height" 2>/dev/null || echo "0")
+    fi
+
+    LAST_EXTERNAL_FETCH=$now
+}
 
 collect_metrics() {
     local timestamp=$(date +%s)
@@ -443,6 +490,29 @@ EOF
 avalanche_node_version_info{version="${node_version}"} 1
 
 EOF
+
+    # =========================================================================
+    # External Data (latest version, network height)
+    # =========================================================================
+    fetch_external_data
+
+    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
+        cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP avalanche_latest_version_info Latest stable version from GitHub
+# TYPE avalanche_latest_version_info gauge
+avalanche_latest_version_info{version="${CACHED_LATEST_VERSION}"} 1
+
+EOF
+    fi
+
+    if [[ -n "$CACHED_NETWORK_HEIGHT" ]] && [[ "$CACHED_NETWORK_HEIGHT" -gt 0 ]]; then
+        cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP avalanche_network_block_height Network block height from public RPC
+# TYPE avalanche_network_block_height gauge
+avalanche_network_block_height ${CACHED_NETWORK_HEIGHT}
+
+EOF
+    fi
 
     # =========================================================================
     # Collector metadata
