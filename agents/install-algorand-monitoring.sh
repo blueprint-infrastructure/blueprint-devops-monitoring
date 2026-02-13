@@ -46,7 +46,7 @@ echo ""
 # =============================================================================
 
 # AMP config (required)
-AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-}"
+AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-ws-fdcbcf55-ed2c-4069-adad-c385e068d992}"
 AMP_REGION="${AMP_REGION:-us-east-1}"
 
 # Algorand node config
@@ -245,6 +245,106 @@ SCRAPE_INTERVAL="${SCRAPE_INTERVAL:-15}"
 METRICS_FILE="/tmp/algorand_collector_metrics.prom"
 METRICS_FILE_TMP="/tmp/algorand_collector_metrics.prom.tmp"
 
+# External data cache
+EXTERNAL_DATA_FILE="/tmp/algorand_external_data.cache"
+EXTERNAL_DATA_INTERVAL=300  # 5 minutes
+
+# Cached external data (populated by fetch_external_data)
+CACHED_LATEST_VERSION=""
+CACHED_NETWORK_ROUND=""
+
+# Fetch latest version from GitHub
+fetch_latest_version() {
+    local latest_version=""
+    local github_response
+
+    # Try GitHub API for go-algorand releases
+    github_response=$(curl -s --max-time 10 \
+        -H "Accept: application/vnd.github.v3+json" \
+        "https://api.github.com/repos/algorand/go-algorand/releases/latest" 2>/dev/null || echo "{}")
+
+    if echo "$github_response" | grep -q '"tag_name"'; then
+        latest_version=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "")
+    fi
+
+    echo "$latest_version"
+}
+
+# Fetch network round from Algorand public API
+fetch_network_round() {
+    local network_round=""
+    local api_response
+
+    # Try AlgoNode public API (mainnet)
+    api_response=$(curl -s --max-time 10 \
+        "https://mainnet-api.algonode.cloud/v2/status" 2>/dev/null || echo "{}")
+
+    if echo "$api_response" | grep -q '"last-round"'; then
+        network_round=$(echo "$api_response" | grep -o '"last-round":[0-9]*' | cut -d':' -f2 || echo "")
+    fi
+
+    # Fallback to Algorand indexer if needed
+    if [[ -z "$network_round" ]]; then
+        api_response=$(curl -s --max-time 10 \
+            "https://mainnet-idx.algonode.cloud/health" 2>/dev/null || echo "{}")
+        if echo "$api_response" | grep -q '"round"'; then
+            network_round=$(echo "$api_response" | grep -o '"round":[0-9]*' | cut -d':' -f2 || echo "")
+        fi
+    fi
+
+    echo "$network_round"
+}
+
+# Fetch and cache external data (rate-limited)
+fetch_external_data() {
+    local current_time=$(date +%s)
+    local cache_time=0
+    local cached_version=""
+    local cached_round=""
+
+    # Read cache if exists
+    if [[ -f "$EXTERNAL_DATA_FILE" ]]; then
+        cache_time=$(head -1 "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "0")
+        cached_version=$(sed -n '2p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
+        cached_round=$(sed -n '3p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
+    fi
+
+    # Check if cache is still valid
+    local cache_age=$((current_time - cache_time))
+    if [[ "$cache_age" -lt "$EXTERNAL_DATA_INTERVAL" ]] && [[ -n "$cached_version" || -n "$cached_round" ]]; then
+        CACHED_LATEST_VERSION="$cached_version"
+        CACHED_NETWORK_ROUND="$cached_round"
+        return 0
+    fi
+
+    # Fetch fresh data
+    local new_version
+    local new_round
+
+    new_version=$(fetch_latest_version)
+    new_round=$(fetch_network_round)
+
+    # Use new data if available, otherwise keep cached
+    if [[ -n "$new_version" ]]; then
+        CACHED_LATEST_VERSION="$new_version"
+    else
+        CACHED_LATEST_VERSION="$cached_version"
+    fi
+
+    if [[ -n "$new_round" ]]; then
+        CACHED_NETWORK_ROUND="$new_round"
+    else
+        CACHED_NETWORK_ROUND="$cached_round"
+    fi
+
+    # Update cache file
+    {
+        echo "$current_time"
+        echo "$CACHED_LATEST_VERSION"
+        echo "$CACHED_NETWORK_ROUND"
+    } > "$EXTERNAL_DATA_FILE"
+}
+
 # Helper to make API calls
 api_call() {
     local endpoint="$1"
@@ -259,6 +359,9 @@ api_call() {
 
 collect_metrics() {
     local timestamp=$(date +%s)
+
+    # Fetch external data at start of collection (rate-limited internally)
+    fetch_external_data
 
     cat > "$METRICS_FILE_TMP" <<EOF
 # HELP algorand_collector_scrape_timestamp_seconds Unix timestamp of last scrape
@@ -346,22 +449,41 @@ algorand_node_synced ${is_synced}
 EOF
 
     # =========================================================================
-    # Rounds Behind (compare with network)
+    # Network Round and Rounds Behind
     # =========================================================================
+    local network_round=0
     local rounds_behind=0
 
-    # Try to get network round from status (next-version-round or similar)
-    # If catchup-time > 0, the node is behind
-    if [[ "$catchup_time" -gt 0 ]]; then
-        # Estimate rounds behind based on catchup time (rough: ~3.3 seconds per round)
-        rounds_behind=$((catchup_time / 3300000000))
-        if [[ "$rounds_behind" -lt 1 ]]; then
-            rounds_behind=1
+    # Use cached network round from external data
+    # Ensure numeric comparison by removing any whitespace
+    local cached_round_num="${CACHED_NETWORK_ROUND//[^0-9]/}"
+    local last_round_num="${last_round//[^0-9]/}"
+
+    if [[ -n "$cached_round_num" ]] && [[ "$cached_round_num" -gt 0 ]]; then
+        network_round="$cached_round_num"
+        # Calculate rounds behind
+        if [[ -n "$last_round_num" ]] && [[ "$last_round_num" -gt 0 ]]; then
+            rounds_behind=$((cached_round_num - last_round_num))
+            if [[ "$rounds_behind" -lt 0 ]]; then
+                rounds_behind=0
+            fi
+        fi
+    else
+        # Fallback: estimate from catchup time if network round unavailable
+        if [[ "$catchup_time" -gt 0 ]]; then
+            rounds_behind=$((catchup_time / 3300000000))
+            if [[ "$rounds_behind" -lt 1 ]]; then
+                rounds_behind=1
+            fi
         fi
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP algorand_node_rounds_behind Estimated rounds behind the network
+# HELP algorand_network_round Network round from public API
+# TYPE algorand_network_round gauge
+algorand_network_round ${network_round}
+
+# HELP algorand_node_rounds_behind Rounds behind the network (network_round - last_round)
 # TYPE algorand_node_rounds_behind gauge
 algorand_node_rounds_behind ${rounds_behind}
 
@@ -471,10 +593,20 @@ EOF
         build_version="${major}.${minor}.${patch}"
     fi
 
+    # Latest version from GitHub
+    local latest_version="unknown"
+    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
+        latest_version="$CACHED_LATEST_VERSION"
+    fi
+
     cat >> "$METRICS_FILE_TMP" <<EOF
 # HELP algorand_node_version_info Algorand node version
 # TYPE algorand_node_version_info gauge
 algorand_node_version_info{version="${build_version}"} 1
+
+# HELP algorand_latest_version_info Latest Algorand version from GitHub
+# TYPE algorand_latest_version_info gauge
+algorand_latest_version_info{version="${latest_version}"} 1
 
 EOF
 
@@ -698,7 +830,8 @@ echo "    - algorand_node_last_round         # Current round number"
 echo ""
 echo "  Sync Status:"
 echo "    - algorand_node_synced             # Whether synced with network"
-echo "    - algorand_node_rounds_behind      # Estimated rounds behind"
+echo "    - algorand_network_round           # Network round from public API"
+echo "    - algorand_node_rounds_behind      # Rounds behind (network - local)"
 echo "    - algorand_node_catchup_time_ns    # Time spent catching up"
 echo ""
 echo "  Participation Status:"
@@ -733,5 +866,7 @@ echo ""
 echo "  # After 1-2 minutes, verify in AMP/AMG:"
 echo "  #   algorand_node_healthy"
 echo "  #   algorand_node_synced"
+echo "  #   algorand_network_round"
 echo "  #   algorand_node_rounds_behind"
+echo "  #   algorand_latest_version_info"
 echo ""

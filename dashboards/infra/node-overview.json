@@ -42,7 +42,7 @@
           "refId": "D"
         },
         {
-          "expr": "label_replace(avalanche_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "label_replace(avalanche_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\") or label_replace(solana_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "E"
@@ -72,7 +72,7 @@
           "refId": "I"
         },
         {
-          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) * on() group_right() (avalanche_network_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or solana_network_block_height{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) * on() group_right() (avalanche_network_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or max(solana_network_block_height{chain=\"solana\"}) * on() group_right() (solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or algorand_network_round{chain=~\"$chain\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "J"
@@ -710,7 +710,7 @@
             }
           },
           "mappings": [],
-          "min": 0,
+          "min": 95,
           "max": 100,
           "thresholds": {
             "mode": "absolute",
@@ -720,7 +720,7 @@
                 "color": "red"
               },
               {
-                "value": 80,
+                "value": 97,
                 "color": "green"
               }
             ]

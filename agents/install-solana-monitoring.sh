@@ -46,7 +46,7 @@ echo ""
 # =============================================================================
 
 # AMP config (required)
-AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-}"
+AMP_WORKSPACE_ID="${AMP_WORKSPACE_ID:-ws-fdcbcf55-ed2c-4069-adad-c385e068d992}"
 AMP_REGION="${AMP_REGION:-us-east-1}"
 
 # Solana RPC config
@@ -209,7 +209,16 @@ SCRAPE_INTERVAL="${SCRAPE_INTERVAL:-15}"
 METRICS_FILE="/tmp/solana_collector_metrics.prom"
 METRICS_FILE_TMP="/tmp/solana_collector_metrics.prom.tmp"
 
-# Helper to make RPC calls
+# External data cache (refreshed every 5 minutes)
+EXTERNAL_DATA_INTERVAL=300  # 5 minutes
+
+# Cached values
+CACHED_LATEST_VERSION=""
+CACHED_NETWORK_SLOT=""
+CACHED_CLIENT_TYPE=""  # "agave" or "firedancer"
+LAST_EXTERNAL_FETCH=0
+
+# Helper to make RPC calls (must be defined before functions that use it)
 rpc_call() {
     local method="$1"
     local params="${2:-[]}"
@@ -218,8 +227,81 @@ rpc_call() {
         "${SOLANA_RPC}" 2>/dev/null || echo '{}'
 }
 
+# Detect client type (Firedancer or Agave)
+detect_client_type() {
+    if [[ -n "$CACHED_CLIENT_TYPE" ]]; then
+        return 0
+    fi
+
+    local version_response
+    version_response=$(rpc_call "getVersion")
+
+    # Both Firedancer and Agave return "solana-core" field
+    # Firedancer uses version format "0.xxx.xxxxx" (e.g., "0.808.30014")
+    # Agave uses version format "x.y.z" where x >= 1 (e.g., "2.1.8", "3.1.8")
+    local solana_core_version
+    solana_core_version=$(echo "$version_response" | grep -o '"solana-core"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[0-9][^"]*"' | tr -d '"' || echo "")
+
+    if [[ "$solana_core_version" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
+        # Version starts with 0. -> Firedancer
+        CACHED_CLIENT_TYPE="firedancer"
+    else
+        # Version starts with 1+ -> Agave
+        CACHED_CLIENT_TYPE="agave"
+    fi
+}
+
+# Fetch external data (GitHub latest version, network slot from public RPC)
+fetch_external_data() {
+    local now=$(date +%s)
+    local cache_age=$((now - LAST_EXTERNAL_FETCH))
+
+    # Only fetch if cache is older than EXTERNAL_DATA_INTERVAL
+    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_LATEST_VERSION" ]]; then
+        return 0
+    fi
+
+    # Detect client type first
+    detect_client_type
+
+    # Fetch latest release version from GitHub based on client type
+    local github_response
+    local github_repo
+
+    if [[ "$CACHED_CLIENT_TYPE" == "firedancer" ]]; then
+        github_repo="firedancer-io/firedancer"
+    else
+        github_repo="anza-xyz/agave"
+    fi
+
+    github_response=$(curl -s --max-time 10 \
+        -H "Accept: application/vnd.github.v3+json" \
+        "https://api.github.com/repos/${github_repo}/releases/latest" 2>/dev/null || echo '{}')
+
+    if echo "$github_response" | grep -q '"tag_name"'; then
+        # Handle both "tag_name":"v1.18.x" and "tag_name": "v1.18.x" formats
+        CACHED_LATEST_VERSION=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "unknown")
+    fi
+
+    # Fetch network block height from public Solana mainnet RPC
+    local network_response
+    network_response=$(curl -s --max-time 10 -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"getBlockHeight"}' \
+        "https://api.mainnet-beta.solana.com" 2>/dev/null || echo '{}')
+
+    if echo "$network_response" | grep -q '"result"'; then
+        CACHED_NETWORK_SLOT=$(echo "$network_response" | grep -o '"result":[0-9]*' | cut -d':' -f2 || echo "0")
+    fi
+
+    LAST_EXTERNAL_FETCH=$now
+}
+
 collect_metrics() {
     local timestamp=$(date +%s)
+
+    # Fetch external data first (network block height, latest version)
+    fetch_external_data
 
     cat > "$METRICS_FILE_TMP" <<EOF
 # HELP solana_collector_scrape_timestamp_seconds Unix timestamp of last scrape
@@ -273,34 +355,29 @@ EOF
     fi
 
     # Calculate slots behind using solana catchup if available
-    local slots_behind=0
     local is_synced=1
 
-    # Try to get slots behind from getBlockHeight comparison
+    # Get local block height
     local block_height_response
     block_height_response=$(rpc_call "getBlockHeight")
     local block_height=0
     block_height=$(echo "$block_height_response" | grep -o '"result":[0-9]*' | cut -d':' -f2 || echo "0")
 
-    # Get highest snapshot slot to estimate sync status
-    # If we can't determine, assume synced if healthy
-    if [[ "$is_healthy" -eq 0 ]]; then
-        is_synced=0
+    # Calculate blocks behind using network block height from external data
+    # fetch_external_data is called later, so we use cached value
+    local blocks_behind=0
+    if [[ -n "$CACHED_NETWORK_SLOT" ]] && [[ "$CACHED_NETWORK_SLOT" -gt 0 ]] && [[ "$block_height" -gt 0 ]]; then
+        blocks_behind=$((CACHED_NETWORK_SLOT - block_height))
+        if [[ "$blocks_behind" -lt 0 ]]; then
+            blocks_behind=0
+        fi
     fi
 
-    # Try using solana catchup for more accurate slots behind
-    if command -v solana >/dev/null 2>&1; then
-        local catchup_output
-        catchup_output=$(timeout 10 solana catchup --our-localhost --url "${SOLANA_RPC}" 2>&1 || echo "")
-        if echo "$catchup_output" | grep -q "slot(s) behind"; then
-            slots_behind=$(echo "$catchup_output" | grep -o '[0-9]* slot(s) behind' | grep -o '^[0-9]*' || echo "0")
-            if [[ "$slots_behind" -gt 0 ]]; then
-                is_synced=0
-            fi
-        elif echo "$catchup_output" | grep -qi "caught up\|has caught up"; then
-            slots_behind=0
-            is_synced=1
-        fi
+    # Determine sync status based on blocks behind
+    if [[ "$is_healthy" -eq 0 ]]; then
+        is_synced=0
+    elif [[ "$blocks_behind" -gt 100 ]]; then
+        is_synced=0
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF
@@ -328,9 +405,9 @@ solana_node_slot_index ${slot_index}
 # TYPE solana_node_slots_in_epoch gauge
 solana_node_slots_in_epoch ${slots_in_epoch}
 
-# HELP solana_node_slots_behind Number of slots behind the cluster
+# HELP solana_node_slots_behind Number of blocks behind the network
 # TYPE solana_node_slots_behind gauge
-solana_node_slots_behind ${slots_behind}
+solana_node_slots_behind ${blocks_behind}
 
 # HELP solana_node_synced Whether node is synced with cluster (1=synced, 0=syncing)
 # TYPE solana_node_synced gauge
@@ -534,8 +611,20 @@ EOF
     local version_response
     version_response=$(rpc_call "getVersion")
     local solana_version="unknown"
+
+    # Try solana-core first (standard Agave/Solana validator)
     if echo "$version_response" | grep -q '"solana-core"'; then
         solana_version=$(echo "$version_response" | grep -o '"solana-core":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    # Try feature-set for Firedancer (extract version from result)
+    elif echo "$version_response" | grep -q '"feature-set"'; then
+        # Firedancer returns version in format like "0.808.30014"
+        # Try to get version from CLI if available
+        if command -v fdctl >/dev/null 2>&1; then
+            solana_version=$(fdctl version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+        elif command -v solana >/dev/null 2>&1; then
+            # Fallback to solana CLI version
+            solana_version=$(solana --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+        fi
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF
@@ -544,6 +633,29 @@ EOF
 solana_node_version_info{version="${solana_version}"} 1
 
 EOF
+
+    # =========================================================================
+    # External Data (latest version, network block height)
+    # =========================================================================
+    # fetch_external_data is called at the start of collect_metrics()
+
+    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
+        cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP solana_latest_version_info Latest stable version from GitHub
+# TYPE solana_latest_version_info gauge
+solana_latest_version_info{version="${CACHED_LATEST_VERSION}"} 1
+
+EOF
+    fi
+
+    if [[ -n "$CACHED_NETWORK_SLOT" ]] && [[ "$CACHED_NETWORK_SLOT" -gt 0 ]]; then
+        cat >> "$METRICS_FILE_TMP" <<EOF
+# HELP solana_network_block_height Network block height (slot) from public RPC
+# TYPE solana_network_block_height gauge
+solana_network_block_height ${CACHED_NETWORK_SLOT}
+
+EOF
+    fi
 
     # =========================================================================
     # Collector metadata
