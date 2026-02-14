@@ -3,76 +3,76 @@
   "tags": ["infrastructure", "nodes"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "panels": [
     {
-      "id": 2,
-      "title": "Node Status Table",
+      "id": 20,
+      "title": "Solana Validators",
       "type": "table",
       "gridPos": {
-        "h": 10,
+        "h": 4,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "targets": [
         {
-          "expr": "min by (instance, chain) (up{chain=~\"$chain\",instance=~\"$instance\",instance!~\"localhost.*\"})",
+          "expr": "up{chain=\"solana\",instance=~\"$instance\",instance!~\"localhost.*\"}",
           "format": "table",
           "instant": true,
           "refId": "A"
         },
         {
-          "expr": "avalanche_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_healthy{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
+          "expr": "solana_node_healthy{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "B"
         },
         {
-          "expr": "(1 - avalanche_c_chain_syncing{chain=~\"$chain\",instance=~\"$instance\"}) or solana_node_synced{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_synced{chain=~\"$chain\",instance=~\"$instance\"} or (besu_synchronizer_in_sync{chain=~\"$chain\",instance=~\"$instance\"} == 1 and on(chain) (1 - beacon_node_syncing_active{chain=~\"$chain\"}) and on(chain) (validator_local_validator_counts{chain=~\"$chain\",status=\"active_ongoing\"} > 0))",
+          "expr": "solana_node_synced{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "C"
         },
         {
-          "expr": "label_replace(solana_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(avalanche_node_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\") or label_replace(beacon_teku_version_total{chain=~\"$chain\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "label_replace(solana_node_version_info{chain=\"solana\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(avalanche_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\") or label_replace(solana_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\") or label_replace(algorand_latest_version_info{chain=~\"$chain\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "label_replace(solana_latest_version_info{chain=\"solana\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "ethereum_peer_count{chain=~\"$chain\",instance=~\"$instance\"} or besu_peers_connected_total{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_network_peers{chain=~\"$chain\",instance=~\"$instance\"} or solana_network_peers{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "solana_network_peers{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"} or avalanche_c_chain_block_height{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} or algorand_node_last_round{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "solana_node_block_height{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "beacon_current_epoch{chain=~\"$chain\",instance=~\"$instance\"} or solana_node_epoch{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "solana_network_block_height{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "H"
         },
         {
-          "expr": "solana_validator_activated_stake_lamports{chain=~\"$chain\",instance=~\"$instance\"} / 1e9 or avalanche_platformvm_local_staked{chain=~\"$chain\",instance=~\"$instance\"} / 1e9 or validator_local_validator_balances{chain=~\"$chain\",instance=~\"$instance\"} / 1e9",
+          "expr": "solana_node_epoch{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "I"
         },
         {
-          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) * on() group_right() (avalanche_network_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or max(solana_network_block_height{chain=\"solana\"}) * on() group_right() (solana_node_block_height{chain=~\"$chain\",instance=~\"$instance\"} * 0 + 1) or algorand_network_round{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "solana_validator_activated_stake_lamports{chain=\"solana\",instance=~\"$instance\"} / 1e9",
           "format": "table",
           "instant": true,
           "refId": "J"
@@ -83,461 +83,119 @@
           "custom": {
             "align": "auto",
             "displayMode": "auto",
-            "inspect": false,
-            "width": "auto"
+            "inspect": false
           }
         },
         "overrides": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
             "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
+            "matcher": { "id": "byName", "options": "Healthy" },
             "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Down",
-                        "color": "red",
-                        "index": 0
-                      },
-                      "1": {
-                        "text": "Up",
-                        "color": "green",
-                        "index": 1
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Unhealthy", "color": "red" }, "1": { "text": "Healthy", "color": "green" } } }] }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Healthy"
-            },
+            "matcher": { "id": "byName", "options": "Synced" },
             "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Unhealthy",
-                        "color": "red",
-                        "index": 0
-                      },
-                      "1": {
-                        "text": "Healthy",
-                        "color": "green",
-                        "index": 1
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Synced"
-            },
+            "matcher": { "id": "byName", "options": "Block Height" },
             "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Syncing",
-                        "color": "yellow",
-                        "index": 0
-                      },
-                      "1": {
-                        "text": "Synced",
-                        "color": "green",
-                        "index": 1
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Version"
-            },
+            "matcher": { "id": "byName", "options": "Network Height" },
             "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-blue" } }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Latest Version"
-            },
+            "matcher": { "id": "byName", "options": "Epoch" },
             "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "light-green"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Network Height"
-            },
+            "matcher": { "id": "byName", "options": "Stake (SOL)" },
             "properties": [
-              {
-                "id": "unit",
-                "value": "locale"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "light-blue"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              }
+              { "id": "unit", "value": "locale" },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "Peer Count"
-            },
+            "matcher": { "id": "byName", "options": "Latest Version" },
             "properties": [
-              {
-                "id": "unit",
-                "value": "locale"
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Block Height"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "locale"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Current Epoch"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "locale"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "purple"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Validator Stake"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "locale"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "special",
-                    "options": {
-                      "match": "null+nan",
-                      "result": {
-                        "text": "N/A",
-                        "color": "text"
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
             ]
           }
         ]
       },
       "options": {
         "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "instance"
-          }
-        ],
+        "sortBy": [{ "desc": false, "displayName": "instance" }],
         "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": ["sum"],
-          "countRows": true
-        }
+        "footer": { "show": false }
       },
       "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
+        { "id": "merge", "options": {} },
         {
           "id": "groupBy",
           "options": {
             "fields": {
-              "instance": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "chain": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "Value #A": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #B": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #C": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "node_version": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "latest_version": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #F": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #G": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #H": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #I": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              },
-              "Value #J": {
-                "aggregations": ["lastNotNull"],
-                "operation": "aggregate"
-              }
+              "instance": { "aggregations": [], "operation": "groupby" },
+              "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value #D (lastNotNull)": true,
-              "Value #E (lastNotNull)": true
-            },
+            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
             "indexByName": {
               "instance": 0,
-              "chain": 1,
-              "Value #A (lastNotNull)": 2,
-              "Value #B (lastNotNull)": 3,
-              "Value #C (lastNotNull)": 4,
-              "node_version (lastNotNull)": 5,
-              "latest_version (lastNotNull)": 6,
-              "Value #F (lastNotNull)": 7,
-              "Value #G (lastNotNull)": 8,
-              "Value #J (lastNotNull)": 9,
-              "Value #H (lastNotNull)": 10,
-              "Value #I (lastNotNull)": 11
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "node_version (lastNotNull)": 4,
+              "latest_version (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9,
+              "Value #J (lastNotNull)": 10
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
@@ -545,11 +203,614 @@
               "Value #C (lastNotNull)": "Synced",
               "node_version (lastNotNull)": "Version",
               "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peer Count",
+              "Value #F (lastNotNull)": "Peers",
               "Value #G (lastNotNull)": "Block Height",
-              "Value #J (lastNotNull)": "Network Height",
-              "Value #H (lastNotNull)": "Current Epoch",
-              "Value #I (lastNotNull)": "Validator Stake"
+              "Value #H (lastNotNull)": "Network Height",
+              "Value #I (lastNotNull)": "Epoch",
+              "Value #J (lastNotNull)": "Stake (SOL)"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "Avalanche Validators",
+      "type": "table",
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "up{chain=\"avalanche\",instance=~\"$instance\",instance!~\"localhost.*\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "avalanche_node_healthy{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "1 - avalanche_c_chain_syncing{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "label_replace(avalanche_node_version_info{chain=\"avalanche\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "label_replace(avalanche_latest_version_info{chain=\"avalanche\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "expr": "avalanche_network_peers{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "avalanche_c_chain_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "expr": "avalanche_network_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "avalanche_platformvm_local_staked{chain=\"avalanche\",instance=~\"$instance\"} / 1e9",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
+        },
+        {
+          "expr": "avalanche_uptime_rewarding_stake_percent{chain=\"avalanche\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "J"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Healthy" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Unhealthy", "color": "red" }, "1": { "text": "Healthy", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Synced" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Block Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Network Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Stake (AVAX)" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "decimals", "value": 0 },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Rewarding %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "decimals", "value": 2 },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Latest Version" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "instance" }],
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": { "aggregations": [], "operation": "groupby" },
+              "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "indexByName": {
+              "instance": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "node_version (lastNotNull)": 4,
+              "latest_version (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9,
+              "Value #J (lastNotNull)": 10
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Status",
+              "Value #B (lastNotNull)": "Healthy",
+              "Value #C (lastNotNull)": "Synced",
+              "node_version (lastNotNull)": "Version",
+              "latest_version (lastNotNull)": "Latest Version",
+              "Value #F (lastNotNull)": "Peers",
+              "Value #G (lastNotNull)": "Block Height",
+              "Value #H (lastNotNull)": "Network Height",
+              "Value #I (lastNotNull)": "Stake (AVAX)",
+              "Value #J (lastNotNull)": "Rewarding %"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "Algorand Validators",
+      "type": "table",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "expr": "up{chain=\"algorand\",instance=~\"$instance\",instance!~\"localhost.*\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "algorand_node_healthy{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "algorand_node_synced{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "label_replace(algorand_node_version_info{chain=\"algorand\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "label_replace(algorand_latest_version_info{chain=\"algorand\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "expr": "algorand_network_peers{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "algorand_node_last_round{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "expr": "algorand_network_round{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "algorand_participation_key_active{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Healthy" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Unhealthy", "color": "red" }, "1": { "text": "Healthy", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Synced" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Round" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Network Round" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Part Key" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "No", "color": "yellow" }, "1": { "text": "Active", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Latest Version" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "instance" }],
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": { "aggregations": [], "operation": "groupby" },
+              "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "indexByName": {
+              "instance": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "node_version (lastNotNull)": 4,
+              "latest_version (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Status",
+              "Value #B (lastNotNull)": "Healthy",
+              "Value #C (lastNotNull)": "Synced",
+              "node_version (lastNotNull)": "Version",
+              "latest_version (lastNotNull)": "Latest Version",
+              "Value #F (lastNotNull)": "Peers",
+              "Value #G (lastNotNull)": "Round",
+              "Value #H (lastNotNull)": "Network Round",
+              "Value #I (lastNotNull)": "Part Key"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "Ethereum Validators",
+      "type": "table",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "expr": "up{chain=\"ethereum\",instance=~\"$instance\",instance!~\"localhost.*\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "besu_synchronizer_in_sync{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "1 - beacon_node_syncing_active{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "label_replace(beacon_teku_version_total{chain=\"ethereum\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "label_replace(ethereum_teku_latest_version_info{chain=\"ethereum\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "expr": "ethereum_peer_count{chain=\"ethereum\",instance=~\"$instance\"} or besu_peers_connected_total{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "ethereum_blockchain_height{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "expr": "ethereum_network_block_height{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "beacon_current_epoch{chain=\"ethereum\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
+        },
+        {
+          "expr": "validator_local_validator_balances{chain=\"ethereum\",instance=~\"$instance\"} / 1e9",
+          "format": "table",
+          "instant": true,
+          "refId": "J"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Besu Synced" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Beacon Synced" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Block Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Network Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Epoch" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Balance (ETH)" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "decimals", "value": 4 },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Latest Version" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "instance" }],
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": { "aggregations": [], "operation": "groupby" },
+              "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "indexByName": {
+              "instance": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "node_version (lastNotNull)": 4,
+              "latest_version (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9,
+              "Value #J (lastNotNull)": 10
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Status",
+              "Value #B (lastNotNull)": "Besu Synced",
+              "Value #C (lastNotNull)": "Beacon Synced",
+              "node_version (lastNotNull)": "Version",
+              "latest_version (lastNotNull)": "Latest Version",
+              "Value #F (lastNotNull)": "Peers",
+              "Value #G (lastNotNull)": "Block Height",
+              "Value #H (lastNotNull)": "Network Height",
+              "Value #I (lastNotNull)": "Epoch",
+              "Value #J (lastNotNull)": "Balance (ETH)"
             }
           }
         }
@@ -563,92 +824,62 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 17
       },
       "targets": [
         {
-          "expr": "ethereum_best_known_block_number{chain=~\"$chain\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "ethereum_best_known_block_number{chain=\"ethereum\",instance=~\"$instance\"} - ethereum_blockchain_height{chain=\"ethereum\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Ethereum)",
           "refId": "A"
         },
         {
-          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) - on() group_right() avalanche_c_chain_block_height{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "max(avalanche_network_block_height{chain=\"avalanche\"}) - on() group_right() avalanche_c_chain_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Avalanche)",
           "refId": "B"
         },
         {
-          "expr": "solana_node_slots_behind{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "solana_node_slots_behind{chain=\"solana\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Solana)",
           "refId": "C"
         },
         {
-          "expr": "algorand_node_rounds_behind{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "algorand_node_rounds_behind{chain=\"algorand\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Algorand)",
           "refId": "D"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "Blocks",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 100,
-                "color": "yellow"
-              },
-              {
-                "value": 1000,
-                "color": "red"
-              }
+              { "value": null, "color": "green" },
+              { "value": 100, "color": "yellow" },
+              { "value": 1000, "color": "red" }
             ]
           },
           "unit": "short"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -665,49 +896,30 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 25
       },
       "targets": [
         {
-          "expr": "avalanche_uptime_rewarding_stake_percent{chain=~\"$chain\",instance=~\"$instance\"}",
+          "expr": "avalanche_uptime_rewarding_stake_percent{chain=\"avalanche\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
           },
           "mappings": [],
           "min": 95,
@@ -715,24 +927,15 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "red"
-              },
-              {
-                "value": 97,
-                "color": "green"
-              }
+              { "value": null, "color": "red" },
+              { "value": 97, "color": "green" }
             ]
           },
           "unit": "percent"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "min", "lastNotNull"],
           "displayMode": "table",
@@ -749,7 +952,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 33
       },
       "targets": [
         {
@@ -760,38 +963,19 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "max": 100,
@@ -799,28 +983,16 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 80,
-                "color": "yellow"
-              },
-              {
-                "value": 90,
-                "color": "red"
-              }
+              { "value": null, "color": "green" },
+              { "value": 80, "color": "yellow" },
+              { "value": 90, "color": "red" }
             ]
           },
           "unit": "percent"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -838,7 +1010,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 33
       },
       "targets": [
         {
@@ -849,38 +1021,19 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "max": 100,
@@ -888,28 +1041,16 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 80,
-                "color": "yellow"
-              },
-              {
-                "value": 90,
-                "color": "red"
-              }
+              { "value": null, "color": "green" },
+              { "value": 80, "color": "yellow" },
+              { "value": 90, "color": "red" }
             ]
           },
           "unit": "percent"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -927,7 +1068,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 41
       },
       "targets": [
         {
@@ -938,38 +1079,19 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "max": 100,
@@ -977,28 +1099,16 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 80,
-                "color": "yellow"
-              },
-              {
-                "value": 90,
-                "color": "red"
-              }
+              { "value": null, "color": "green" },
+              { "value": 80, "color": "yellow" },
+              { "value": 90, "color": "red" }
             ]
           },
           "unit": "percent"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -1016,7 +1126,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 41
       },
       "targets": [
         {
@@ -1032,57 +1142,30 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": true,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "green"
-              }
-            ]
+            "steps": [{ "value": null, "color": "green" }]
           },
           "unit": "Bps"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -1100,7 +1183,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 49
       },
       "targets": [
         {
@@ -1116,57 +1199,30 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": true,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "value": null,
-                "color": "green"
-              }
-            ]
+            "steps": [{ "value": null, "color": "green" }]
           },
           "unit": "Bps"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -1184,7 +1240,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 42
+        "y": 49
       },
       "targets": [
         {
@@ -1210,66 +1266,35 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
             "lineInterpolation": "linear",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "value": null,
-                "color": "green"
-              },
-              {
-                "value": 1,
-                "color": "yellow"
-              },
-              {
-                "value": 10,
-                "color": "red"
-              }
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 10, "color": "red" }
             ]
           },
           "unit": "pps"
         }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": {
           "calcs": ["mean", "max", "lastNotNull"],
           "displayMode": "table",
@@ -1307,17 +1332,9 @@
           "text": "All",
           "value": "$__all"
         },
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          }
-        ],
         "includeAll": true,
         "multi": true,
-        "allValue": ".+",
-        "regex": ""
+        "allValue": ".+"
       },
       {
         "name": "instance",
@@ -1335,17 +1352,9 @@
           "text": "All",
           "value": "$__all"
         },
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          }
-        ],
         "includeAll": true,
         "multi": true,
-        "allValue": ".*",
-        "regex": ""
+        "allValue": ".*"
       },
       {
         "name": "mountpoint",
@@ -1363,17 +1372,9 @@
           "text": "All",
           "value": "$__all"
         },
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          }
-        ],
         "includeAll": true,
         "multi": true,
-        "allValue": ".*",
-        "regex": ""
+        "allValue": ".*"
       }
     ]
   },
