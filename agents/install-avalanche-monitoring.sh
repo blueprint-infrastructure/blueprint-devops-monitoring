@@ -692,6 +692,48 @@ if [[ -f /etc/default/grafana-agent ]]; then
     log_info "Updated /etc/default/grafana-agent ports to avoid conflict"
 fi
 
+# =============================================================================
+# SSM Hybrid Activation Support (On-Premise Nodes)
+# =============================================================================
+# Grafana Agent runs as grafana-agent user, which cannot access /root/.aws/credentials
+# For SSM managed on-premise nodes, we need to copy credentials to a location
+# accessible by grafana-agent and set up automatic refresh
+
+if [[ -f /root/.aws/credentials ]]; then
+    log_info "Detected SSM credentials, configuring for on-premise node..."
+
+    # Copy credentials to grafana-agent accessible location
+    mkdir -p /etc/grafana-agent
+    cp /root/.aws/credentials /etc/grafana-agent/aws-credentials
+    chown grafana-agent:grafana-agent /etc/grafana-agent/aws-credentials
+    chmod 600 /etc/grafana-agent/aws-credentials
+
+    # Configure grafana-agent service to use the credentials file
+    mkdir -p /etc/systemd/system/grafana-agent.service.d
+    cat > /etc/systemd/system/grafana-agent.service.d/aws.conf << 'AWSCONF'
+[Service]
+Environment="AWS_SHARED_CREDENTIALS_FILE=/etc/grafana-agent/aws-credentials"
+AWSCONF
+
+    # Create credentials refresh script (SSM credentials expire periodically)
+    cat > /usr/local/bin/refresh-grafana-agent-credentials.sh << 'REFRESH'
+#!/bin/bash
+# Refresh AWS credentials for grafana-agent from SSM
+if [[ -f /root/.aws/credentials ]]; then
+    cp /root/.aws/credentials /etc/grafana-agent/aws-credentials
+    chown grafana-agent:grafana-agent /etc/grafana-agent/aws-credentials
+    chmod 600 /etc/grafana-agent/aws-credentials
+fi
+REFRESH
+    chmod +x /usr/local/bin/refresh-grafana-agent-credentials.sh
+
+    # Add cron job to refresh credentials every 30 minutes
+    echo "*/30 * * * * root /usr/local/bin/refresh-grafana-agent-credentials.sh" > /etc/cron.d/grafana-agent-credentials
+    chmod 644 /etc/cron.d/grafana-agent-credentials
+
+    log_ok "SSM credentials configured with auto-refresh (every 30 minutes)"
+fi
+
 # Restart service
 systemctl daemon-reload
 systemctl enable grafana-agent
