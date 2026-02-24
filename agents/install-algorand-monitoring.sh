@@ -807,19 +807,23 @@ AWSCONF
     cat > /usr/local/bin/refresh-grafana-agent-credentials.sh << 'REFRESH'
 #!/bin/bash
 # Refresh AWS credentials for grafana-agent from SSM
+# Only sync and restart when credentials actually change
 if [[ -f /root/.aws/credentials ]]; then
-    cp /root/.aws/credentials /etc/grafana-agent/aws-credentials
-    chown grafana-agent:grafana-agent /etc/grafana-agent/aws-credentials
-    chmod 600 /etc/grafana-agent/aws-credentials
+    if ! diff -q /root/.aws/credentials /etc/grafana-agent/aws-credentials >/dev/null 2>&1; then
+        cp /root/.aws/credentials /etc/grafana-agent/aws-credentials
+        chown grafana-agent:grafana-agent /etc/grafana-agent/aws-credentials
+        chmod 600 /etc/grafana-agent/aws-credentials
+        systemctl restart grafana-agent
+    fi
 fi
 REFRESH
     chmod +x /usr/local/bin/refresh-grafana-agent-credentials.sh
 
-    # Add cron job to refresh credentials every 30 minutes
-    echo "*/30 * * * * root /usr/local/bin/refresh-grafana-agent-credentials.sh" > /etc/cron.d/grafana-agent-credentials
+    # Add cron job to check credentials every 5 minutes
+    echo "*/5 * * * * root /usr/local/bin/refresh-grafana-agent-credentials.sh" > /etc/cron.d/grafana-agent-credentials
     chmod 644 /etc/cron.d/grafana-agent-credentials
 
-    log_ok "SSM credentials configured with auto-refresh (every 30 minutes)"
+    log_ok "SSM credentials configured with auto-refresh (every 5 minutes)"
 fi
 
 # Restart service
