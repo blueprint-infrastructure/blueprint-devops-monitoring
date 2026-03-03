@@ -1,0 +1,27 @@
+groups:
+  - name: algorand_participation
+    interval: 30s
+    rules:
+      - alert: AlgorandParticipationKeyExpiring
+        expr: |
+          (algorand_participation_key_valid_last - algorand_node_last_round) <= 600000
+        for: 5m
+        labels:
+          severity: warning
+          chain: algorand
+        annotations:
+          summary: "Algorand participation key expiring soon on {{ $labels.instance }}"
+          description: "Algorand participation key on {{ $labels.instance }} has {{ $value }} rounds remaining (threshold: 600,000). Key renewal required."
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      - alert: AlgorandParticipationKeyCritical
+        expr: |
+          (algorand_participation_key_valid_last - algorand_node_last_round) <= 300000
+        for: 5m
+        labels:
+          severity: critical
+          chain: algorand
+        annotations:
+          summary: "Algorand participation key critically low on {{ $labels.instance }}"
+          description: "Algorand participation key on {{ $labels.instance }} has only {{ $value }} rounds remaining (threshold: 300,000). Immediate key renewal required."
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"

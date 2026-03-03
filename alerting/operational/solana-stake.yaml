@@ -1,0 +1,23 @@
+groups:
+  - name: solana_stake
+    interval: 60s
+    rules:
+      # NOTE: This alert requires solana_validator_activated_stake_lamports to be
+      # reporting correctly. As of the initial implementation, this metric returns 0
+      # due to a bug in solana-collector. The alert will not fire correctly until
+      # the solana-collector is fixed (Phase 5 in the implementation plan).
+      - alert: SolanaStakeSignificantChange
+        expr: |
+          abs(
+            solana_validator_activated_stake_lamports
+            - solana_validator_activated_stake_lamports offset 1d
+          ) / solana_validator_activated_stake_lamports offset 1d > 0.1
+          and solana_validator_activated_stake_lamports offset 1d > 0
+        for: 5m
+        labels:
+          severity: high
+          chain: solana
+        annotations:
+          summary: "Solana validator stake changed significantly on {{ $labels.instance }}"
+          description: "Solana validator activated stake on {{ $labels.instance }} has changed by more than 10% in the last 24 hours. Current: {{ $value }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-stake-change.md"

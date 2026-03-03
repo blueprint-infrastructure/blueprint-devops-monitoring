@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # Master deployment script for monitoring as code
-# Deploys dashboards to Amazon Managed Grafana (AMG)
+# Deploys notifications, dashboards, and alerts to Amazon Managed Grafana (AMG)
 #
-# Note: Alerts and notifications are managed directly in Grafana UI
 # See: https://docs.aws.amazon.com/grafana/latest/userguide/v10-alerting-use-grafana-alerts.html
 
 set -euo pipefail
@@ -36,6 +35,7 @@ fi
 
 # Parse command line arguments
 SKIP_VALIDATION=false
+DEPLOY_NOTIFICATIONS=true
 DEPLOY_DASHBOARDS=true
 DEPLOY_ALERTS=true
 
@@ -45,11 +45,18 @@ while [[ $# -gt 0 ]]; do
             SKIP_VALIDATION=true
             shift
             ;;
+        --notifications-only)
+            DEPLOY_DASHBOARDS=false
+            DEPLOY_ALERTS=false
+            shift
+            ;;
         --dashboards-only)
+            DEPLOY_NOTIFICATIONS=false
             DEPLOY_ALERTS=false
             shift
             ;;
         --alerts-only)
+            DEPLOY_NOTIFICATIONS=false
             DEPLOY_DASHBOARDS=false
             shift
             ;;
@@ -57,20 +64,24 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --skip-validation  Skip pre-deployment validation"
-            echo "  --dashboards-only  Deploy only dashboards"
-            echo "  --alerts-only      Deploy only alert rules"
-            echo "  --help             Show this help message"
+            echo "  --skip-validation    Skip pre-deployment validation"
+            echo "  --notifications-only Deploy only notification contact points and policies"
+            echo "  --dashboards-only    Deploy only dashboards"
+            echo "  --alerts-only        Deploy only alert rules"
+            echo "  --help               Show this help message"
             echo ""
             echo "Environment variables:"
-            echo "  AMG_WORKSPACE_ID    Amazon Managed Grafana workspace ID (required)"
-            echo "  AMG_REGION          AWS region for AMG (default: us-east-1)"
-            echo "  OVERWRITE           Overwrite existing dashboards (default: true)"
-            echo "  DATASOURCE_UID      Prometheus datasource UID for alerts (default: prometheus)"
+            echo "  AMG_WORKSPACE_ID       Amazon Managed Grafana workspace ID (required)"
+            echo "  AMG_REGION             AWS region for AMG (default: us-east-1)"
+            echo "  OVERWRITE              Overwrite existing dashboards (default: true)"
+            echo "  DATASOURCE_UID         Prometheus datasource UID for alerts (default: prometheus)"
+            echo "  TEAMS_WEBHOOK_URL      Microsoft Teams incoming webhook URL (for notifications)"
+            echo "  ALERT_EMAIL_RECIPIENTS Comma-separated email recipients (for notifications)"
             echo ""
             echo "Example:"
             echo "  AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh"
             echo "  AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh --dashboards-only"
+            echo "  AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh --notifications-only"
             exit 0
             ;;
         *)
@@ -95,6 +106,27 @@ if [ -z "${AMG_WORKSPACE_ID:-}" ]; then
     echo -e "${RED}✗ AMG_WORKSPACE_ID not set${NC}"
     echo "Usage: AMG_WORKSPACE_ID=g-xxx ./scripts/deploy.sh"
     exit 1
+fi
+
+# Deploy notifications (contact points + policies) first
+if [ "$DEPLOY_NOTIFICATIONS" = true ]; then
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Deploying Notifications to AMG${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    if [ -z "${TEAMS_WEBHOOK_URL:-}" ]; then
+        echo -e "${YELLOW}⚠ TEAMS_WEBHOOK_URL not set, skipping notification deployment${NC}"
+        echo "  Set TEAMS_WEBHOOK_URL in .env to deploy contact points and policies"
+    else
+        if "${SCRIPT_DIR}/deploy-notifications-amg.sh"; then
+            echo -e "${GREEN}✓ Notifications deployed successfully${NC}"
+        else
+            echo -e "${RED}✗ Notification deployment failed${NC}"
+            exit 1
+        fi
+    fi
+    echo ""
 fi
 
 # Deploy dashboards to AMG
@@ -135,5 +167,5 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 echo "Next steps:"
 echo "  1. Verify alerts in Grafana: Alerting -> Alert rules"
-echo "  2. Set up notification channels: Alerting -> Contact points"
-echo "  3. Configure routing: Alerting -> Notification policies"
+echo "  2. Verify contact points: Alerting -> Contact points"
+echo "  3. Verify notification policies: Alerting -> Notification policies"

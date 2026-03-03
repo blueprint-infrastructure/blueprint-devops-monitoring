@@ -203,49 +203,31 @@ groups:
           runbook_url: "https://github.com/your-org/runbooks/blob/main/validator-performance.md"
 
       # =======================================================================
-      # System Resources (from node_exporter)
+      # Version Monitoring
       # =======================================================================
 
-      - alert: HighCPU
-        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
-        for: 10m
+      - alert: EthBesuVersionDrift
+        expr: |
+          ethereum_besu_version != ethereum_besu_latest_version
+        for: 30m
         labels:
           severity: warning
           chain: ethereum
+          component: execution
         annotations:
-          summary: "High CPU usage on {{ $labels.instance }}"
-          description: "CPU usage is above 85% for more than 10 minutes"
-          runbook_url: "https://github.com/your-org/runbooks/blob/main/high-cpu.md"
+          summary: "Besu version is outdated on {{ $labels.instance }}"
+          description: "Besu execution client on {{ $labels.instance }} is running a different version than the latest release for more than 30 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"
 
-      - alert: HighMemory
-        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
-        for: 10m
+      - alert: EthTekuVersionDrift
+        expr: |
+          ethereum_teku_version != ethereum_teku_latest_version
+        for: 30m
         labels:
           severity: warning
           chain: ethereum
+          component: consensus
         annotations:
-          summary: "High memory usage on {{ $labels.instance }}"
-          description: "Memory usage is above 85% for more than 10 minutes"
-          runbook_url: "https://github.com/your-org/runbooks/blob/main/high-memory.md"
-
-      - alert: DiskSpaceLow
-        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
-        for: 10m
-        labels:
-          severity: warning
-          chain: ethereum
-        annotations:
-          summary: "Disk space low on {{ $labels.instance }}"
-          description: "Less than 15% disk space remaining on root filesystem"
-          runbook_url: "https://github.com/your-org/runbooks/blob/main/disk-full.md"
-
-      - alert: DiskSpaceCritical
-        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
-        for: 5m
-        labels:
-          severity: critical
-          chain: ethereum
-        annotations:
-          summary: "Disk space critical on {{ $labels.instance }}"
-          description: "Less than 5% disk space remaining - validator at risk"
-          runbook_url: "https://github.com/your-org/runbooks/blob/main/disk-full.md"
+          summary: "Teku version is outdated on {{ $labels.instance }}"
+          description: "Teku consensus client on {{ $labels.instance }} is running a different version than the latest release for more than 30 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"

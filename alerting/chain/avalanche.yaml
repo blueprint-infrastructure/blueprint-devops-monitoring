@@ -1,0 +1,134 @@
+groups:
+  - name: avalanche_validator
+    interval: 30s
+    rules:
+      # =======================================================================
+      # Node Health
+      # =======================================================================
+
+      - alert: AvalancheNodeUnhealthy
+        expr: avalanche_node_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: avalanche
+        annotations:
+          summary: "Avalanche node is unhealthy on {{ $labels.instance }}"
+          description: "Avalanche node health check is failing on {{ $labels.instance }} for more than 2 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      - alert: AvalancheNotBootstrapped
+        expr: avalanche_chain_bootstrapped{chain="C"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          chain: avalanche
+        annotations:
+          summary: "Avalanche C-Chain not bootstrapped on {{ $labels.instance }}"
+          description: "Avalanche C-Chain has not completed bootstrapping on {{ $labels.instance }} for more than 10 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      # =======================================================================
+      # Sync Status
+      # =======================================================================
+
+      - alert: AvalancheBlocksBehind
+        expr: avalanche_c_chain_blocks_behind > 100
+        for: 5m
+        labels:
+          severity: high
+          chain: avalanche
+        annotations:
+          summary: "Avalanche C-Chain is {{ $value }} blocks behind on {{ $labels.instance }}"
+          description: "Avalanche C-Chain is more than 100 blocks behind the network on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      - alert: AvalancheBlocksSeverelyBehind
+        expr: avalanche_c_chain_blocks_behind > 1000
+        for: 2m
+        labels:
+          severity: critical
+          chain: avalanche
+        annotations:
+          summary: "Avalanche C-Chain is {{ $value }} blocks behind on {{ $labels.instance }}"
+          description: "Avalanche C-Chain is severely behind (>1000 blocks) on {{ $labels.instance }} - validator performance at risk"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      - alert: AvalancheSyncing
+        expr: avalanche_c_chain_syncing == 1
+        for: 15m
+        labels:
+          severity: high
+          chain: avalanche
+        annotations:
+          summary: "Avalanche C-Chain is syncing on {{ $labels.instance }}"
+          description: "Avalanche C-Chain has been syncing for more than 15 minutes on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      # =======================================================================
+      # Peer Connectivity
+      # =======================================================================
+
+      - alert: AvalancheLowPeers
+        expr: avalanche_network_peers < 10
+        for: 10m
+        labels:
+          severity: high
+          chain: avalanche
+        annotations:
+          summary: "Avalanche node has only {{ $value }} peers on {{ $labels.instance }}"
+          description: "Avalanche node has fewer than 10 peers on {{ $labels.instance }} - network connectivity may be impaired"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      - alert: AvalancheNoPeers
+        expr: avalanche_network_peers == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: avalanche
+        annotations:
+          summary: "Avalanche node has no peers on {{ $labels.instance }}"
+          description: "Avalanche node is isolated with no peer connections on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      # =======================================================================
+      # Validator Uptime / Rewarding Stake
+      # =======================================================================
+
+      - alert: AvalancheRewardingStakeLow
+        expr: avalanche_uptime_rewarding_stake_percent < 97
+        for: 5m
+        labels:
+          severity: warning
+          chain: avalanche
+        annotations:
+          summary: "Avalanche rewarding stake is {{ $value }}% on {{ $labels.instance }}"
+          description: "Avalanche validator rewarding stake percentage has dropped below 97% on {{ $labels.instance }} - may affect rewards"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      - alert: AvalancheRewardingStakeCritical
+        expr: avalanche_uptime_rewarding_stake_percent < 95
+        for: 5m
+        labels:
+          severity: critical
+          chain: avalanche
+        annotations:
+          summary: "Avalanche rewarding stake is critically low at {{ $value }}% on {{ $labels.instance }}"
+          description: "Avalanche validator rewarding stake percentage has dropped below 95% on {{ $labels.instance }} - rewards at risk"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
+      # =======================================================================
+      # Version Monitoring
+      # =======================================================================
+
+      - alert: AvalancheVersionDrift
+        expr: |
+          avalanche_node_version != avalanche_latest_version
+        for: 30m
+        labels:
+          severity: warning
+          chain: avalanche
+        annotations:
+          summary: "Avalanche node version is outdated on {{ $labels.instance }}"
+          description: "Avalanche node on {{ $labels.instance }} is running a different version than the latest release for more than 30 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"

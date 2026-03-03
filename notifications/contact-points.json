@@ -1,0 +1,12 @@
+[
+  {
+    "name": "teams-webhook",
+    "type": "slack",
+    "settings": {
+      "url": "${TEAMS_WEBHOOK_URL}",
+      "title": "{{ .CommonLabels.alertname }}",
+      "text": "**Status:** {{ .Status | toUpper }}\n**Severity:** {{ .CommonLabels.severity }}\n**Instance:** {{ .CommonLabels.instance }}\n\n{{ .CommonAnnotations.summary }}\n\n{{ .CommonAnnotations.description }}"
+    },
+    "disableResolveMessage": false
+  }
+]

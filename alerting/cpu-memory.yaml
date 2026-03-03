@@ -1,5 +1,5 @@
 groups:
-  - name: cpu_memory
+  - name: cpu_memory_network
     interval: 30s
     rules:
       - alert: HighCPU
@@ -18,7 +18,7 @@ groups:
           100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
         for: 5m
         labels:
-          severity: critical
+          severity: high
         annotations:
           summary: "Critical CPU usage on {{ $labels.instance }}"
           description: "CPU usage is above 95% ({{ $value | humanizePercentage }}) on {{ $labels.instance }} for more than 5 minutes"
@@ -44,8 +44,23 @@ groups:
           ) < 5
         for: 5m
         labels:
-          severity: critical
+          severity: high
         annotations:
           summary: "Critical memory pressure on {{ $labels.instance }}"
           description: "Available memory is below 5% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }} for more than 5 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"
+
+      - alert: NetworkUtilizationHigh
+        expr: |
+          (
+            rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) * 8
+          ) / (
+            node_network_speed_bytes{device!~"lo|veth.*|docker.*|br-.*"} * 8
+          ) > 0.95
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Network utilization above 95% on {{ $labels.instance }}:{{ $labels.device }}"
+          description: "Network interface {{ $labels.device }} on {{ $labels.instance }} is saturated (>95% utilization) for more than 5 minutes"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/high-cpu.md"

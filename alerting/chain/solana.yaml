@@ -1,0 +1,123 @@
+groups:
+  - name: solana_validator
+    interval: 30s
+    rules:
+      # =======================================================================
+      # Node Health
+      # =======================================================================
+
+      - alert: SolanaNodeUnhealthy
+        expr: solana_node_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: solana
+        annotations:
+          summary: "Solana node is unhealthy on {{ $labels.instance }}"
+          description: "Solana node health check is failing on {{ $labels.instance }} for more than 2 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      - alert: SolanaNodeNotSynced
+        expr: solana_node_synced == 0
+        for: 5m
+        labels:
+          severity: high
+          chain: solana
+        annotations:
+          summary: "Solana node is not synced on {{ $labels.instance }}"
+          description: "Solana node has been out of sync for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      # =======================================================================
+      # Sync Status
+      # =======================================================================
+
+      - alert: SolanaBlocksBehind
+        expr: solana_node_slots_behind > 100
+        for: 5m
+        labels:
+          severity: high
+          chain: solana
+        annotations:
+          summary: "Solana node is {{ $value }} slots behind on {{ $labels.instance }}"
+          description: "Solana node is more than 100 slots behind the network on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      - alert: SolanaBlocksSeverelyBehind
+        expr: solana_node_slots_behind > 1000
+        for: 2m
+        labels:
+          severity: critical
+          chain: solana
+        annotations:
+          summary: "Solana node is {{ $value }} slots behind on {{ $labels.instance }}"
+          description: "Solana node is severely behind (>1000 slots) on {{ $labels.instance }} - validator may become delinquent"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      - alert: SolanaVotesBehind
+        expr: solana_vote_slots_behind > 50
+        for: 5m
+        labels:
+          severity: high
+          chain: solana
+        annotations:
+          summary: "Solana validator vote account is {{ $value }} slots behind on {{ $labels.instance }}"
+          description: "Vote account is lagging behind confirmed slot by more than 50 slots on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      # =======================================================================
+      # Peer Connectivity
+      # =======================================================================
+
+      - alert: SolanaLowPeers
+        expr: solana_network_peers < 10
+        for: 10m
+        labels:
+          severity: high
+          chain: solana
+        annotations:
+          summary: "Solana node has only {{ $value }} peers on {{ $labels.instance }}"
+          description: "Solana node has fewer than 10 peers on {{ $labels.instance }} - network connectivity may be impaired"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      - alert: SolanaNoPeers
+        expr: solana_network_peers == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: solana
+        annotations:
+          summary: "Solana node has no peers on {{ $labels.instance }}"
+          description: "Solana node is isolated with no peer connections on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      # =======================================================================
+      # Validator Status
+      # =======================================================================
+
+      - alert: SolanaValidatorDelinquent
+        expr: solana_validator_delinquent == 1
+        for: 2m
+        labels:
+          severity: critical
+          chain: solana
+        annotations:
+          summary: "Solana validator is delinquent on {{ $labels.instance }}"
+          description: "Solana validator has been marked as delinquent on {{ $labels.instance }} - not voting and may lose rewards"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
+
+      # =======================================================================
+      # Version Monitoring
+      # =======================================================================
+
+      - alert: SolanaVersionDrift
+        expr: |
+          solana_node_version != solana_latest_version
+        for: 30m
+        labels:
+          severity: warning
+          chain: solana
+        annotations:
+          summary: "Solana node version is outdated on {{ $labels.instance }}"
+          description: "Solana node on {{ $labels.instance }} is running a different version than the latest release for more than 30 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"

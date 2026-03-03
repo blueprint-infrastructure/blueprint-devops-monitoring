@@ -1,0 +1,27 @@
+groups:
+  - name: audius_eth_balance
+    interval: 60s
+    rules:
+      - alert: AudiusClaimsBalanceLow
+        expr: |
+          eth_address_balance{label="audius_claims"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          chain: ethereum
+        annotations:
+          summary: "Audius claims address ETH balance is low ({{ $value }} ETH)"
+          description: "Audius claims address {{ $labels.address }} has only {{ $value }} ETH remaining. Fund the address to ensure continued operation."
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/audius-eth-balance.md"
+
+      - alert: AudiusClaimsBalanceCritical
+        expr: |
+          eth_address_balance{label="audius_claims"} < 0.04
+        for: 5m
+        labels:
+          severity: critical
+          chain: ethereum
+        annotations:
+          summary: "Audius claims address ETH balance is critically low ({{ $value }} ETH)"
+          description: "Audius claims address {{ $labels.address }} has only {{ $value }} ETH remaining. Immediate funding required to prevent service disruption."
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/audius-eth-balance.md"

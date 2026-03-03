@@ -1,0 +1,38 @@
+{
+  "receiver": "teams-webhook",
+  "group_by": ["alertname", "instance"],
+  "group_wait": "30s",
+  "group_interval": "5m",
+  "repeat_interval": "4h",
+  "routes": [
+    {
+      "receiver": "teams-webhook",
+      "matchers": ["severity=critical"],
+      "continue": true,
+      "group_wait": "10s",
+      "group_interval": "1m",
+      "repeat_interval": "1h"
+    },
+    {
+      "receiver": "ses-email",
+      "matchers": ["severity=critical"],
+      "group_wait": "10s",
+      "group_interval": "5m",
+      "repeat_interval": "4h"
+    },
+    {
+      "receiver": "teams-webhook",
+      "matchers": ["severity=high"],
+      "group_wait": "30s",
+      "group_interval": "5m",
+      "repeat_interval": "4h"
+    },
+    {
+      "receiver": "teams-webhook",
+      "matchers": ["severity=warning"],
+      "group_wait": "60s",
+      "group_interval": "5m",
+      "repeat_interval": "12h"
+    }
+  ]
+}

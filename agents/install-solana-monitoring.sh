@@ -811,11 +811,20 @@ metrics:
 integrations:
   agent:
     enabled: true
+  docker:
+    enabled: true
+    host: unix:///var/run/docker.sock
 EOF
 
 # Set permissions
 chmod 644 /etc/grafana-agent.yaml
 chown root:grafana-agent /etc/grafana-agent.yaml 2>/dev/null || true
+
+# Ensure grafana-agent user can access Docker socket
+if getent group docker >/dev/null 2>&1; then
+    usermod -aG docker grafana-agent 2>/dev/null || true
+    log_info "Added grafana-agent to docker group for container metrics"
+fi
 
 # Fix port conflict in /etc/default/grafana-agent
 if [[ -f /etc/default/grafana-agent ]]; then

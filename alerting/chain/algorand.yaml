@@ -1,0 +1,97 @@
+groups:
+  - name: algorand_validator
+    interval: 30s
+    rules:
+      # =======================================================================
+      # Node Health
+      # =======================================================================
+
+      - alert: AlgorandNodeUnhealthy
+        expr: algorand_node_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain: algorand
+        annotations:
+          summary: "Algorand node is unhealthy on {{ $labels.instance }}"
+          description: "Algorand node health check is failing on {{ $labels.instance }} for more than 2 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      - alert: AlgorandNodeNotReady
+        expr: algorand_node_ready == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: algorand
+        annotations:
+          summary: "Algorand node is not ready on {{ $labels.instance }}"
+          description: "Algorand node readiness check is failing on {{ $labels.instance }} for more than 5 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      - alert: AlgorandNodeNotSynced
+        expr: algorand_node_synced == 0
+        for: 5m
+        labels:
+          severity: high
+          chain: algorand
+        annotations:
+          summary: "Algorand node is not synced on {{ $labels.instance }}"
+          description: "Algorand node has been out of sync for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      # =======================================================================
+      # Sync Status
+      # =======================================================================
+
+      - alert: AlgorandRoundsBehind
+        expr: algorand_node_rounds_behind > 10
+        for: 5m
+        labels:
+          severity: high
+          chain: algorand
+        annotations:
+          summary: "Algorand node is {{ $value }} rounds behind on {{ $labels.instance }}"
+          description: "Algorand node is more than 10 rounds behind the network on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      - alert: AlgorandRoundsSeverelyBehind
+        expr: algorand_node_rounds_behind > 100
+        for: 2m
+        labels:
+          severity: critical
+          chain: algorand
+        annotations:
+          summary: "Algorand node is {{ $value }} rounds behind on {{ $labels.instance }}"
+          description: "Algorand node is severely behind (>100 rounds) on {{ $labels.instance }} - participation at risk"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      # =======================================================================
+      # Peer Connectivity
+      # =======================================================================
+
+      - alert: AlgorandLowPeers
+        expr: algorand_network_peers < 5
+        for: 10m
+        labels:
+          severity: high
+          chain: algorand
+        annotations:
+          summary: "Algorand node has only {{ $value }} peers on {{ $labels.instance }}"
+          description: "Algorand node has fewer than 5 peers on {{ $labels.instance }} - network connectivity may be impaired"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
+
+      # =======================================================================
+      # Version Monitoring
+      # =======================================================================
+
+      - alert: AlgorandVersionDrift
+        expr: |
+          algorand_node_version != algorand_latest_version
+        for: 30m
+        labels:
+          severity: warning
+          chain: algorand
+        annotations:
+          summary: "Algorand node version is outdated on {{ $labels.instance }}"
+          description: "Algorand node on {{ $labels.instance }} is running a different version than the latest release for more than 30 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"

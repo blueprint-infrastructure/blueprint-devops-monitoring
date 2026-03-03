@@ -1,0 +1,36 @@
+groups:
+  - name: docker
+    interval: 30s
+    rules:
+      - alert: DockerContainerUnhealthy
+        expr: |
+          container_health_status{status!="healthy"} == 1
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Docker container {{ $labels.name }} is unhealthy on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} health check is reporting status '{{ $labels.status }}' on {{ $labels.instance }} for more than 5 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/docker-unhealthy.md"
+
+      - alert: DockerContainerRestarting
+        expr: |
+          increase(container_restart_count[15m]) > 3
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "Docker container {{ $labels.name }} is restarting frequently on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 15 minutes on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/docker-unhealthy.md"
+
+      - alert: DockerContainerDown
+        expr: |
+          container_running == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Docker container {{ $labels.name }} is down on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} has been stopped for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/docker-unhealthy.md"
