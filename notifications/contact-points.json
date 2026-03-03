@@ -1,11 +1,21 @@
 [
   {
-    "name": "teams-webhook",
-    "type": "slack",
+    "name": "sns-teams",
+    "type": "sns",
     "settings": {
-      "url": "${TEAMS_WEBHOOK_URL}",
-      "title": "{{ .CommonLabels.alertname }}",
-      "text": "**Status:** {{ .Status | toUpper }}\n**Severity:** {{ .CommonLabels.severity }}\n**Instance:** {{ .CommonLabels.instance }}\n\n{{ .CommonAnnotations.summary }}\n\n{{ .CommonAnnotations.description }}"
+      "topic": "${STAKING_ALERT_TOPIC_ARN}",
+      "authProvider": "default",
+      "sigV4Region": "${AMG_REGION}"
+    },
+    "disableResolveMessage": false
+  },
+  {
+    "name": "sns-email",
+    "type": "sns",
+    "settings": {
+      "topic": "${STAKING_ALERT_CRITICAL_TOPIC_ARN}",
+      "authProvider": "default",
+      "sigV4Region": "${AMG_REGION}"
     },
     "disableResolveMessage": false
   }

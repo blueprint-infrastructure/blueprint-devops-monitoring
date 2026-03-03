@@ -3,10 +3,11 @@
 # Deploy notification contact points and policies to Amazon Managed Grafana
 # Uses the Grafana Provisioning API to configure alerting notifications
 #
-# Note: AMG supports limited contact point types: sns, slack, pagerduty,
-# victorops, opsgenie, prometheus-alertmanager.
-# For Teams notifications, we use the 'slack' type with the Teams Workflow
-# webhook URL, which accepts incoming HTTP POST requests.
+# Contact points use SNS topics as the notification channel:
+#   - sns-teams: publishes to staking-alert topic (Lambda -> Teams)
+#   - sns-email: publishes to staking-alert-critical topic (Lambda -> Teams + Email)
+#
+# Prerequisites: Run deploy-sns-lambda.sh first to create the SNS/Lambda infrastructure
 
 set -euo pipefail
 
@@ -31,8 +32,8 @@ AMG_WORKSPACE_ID="${AMG_WORKSPACE_ID:-}"
 AMG_REGION="${AMG_REGION:-${AWS_REGION:-us-east-1}}"
 AMG_API_KEY="${AMG_API_KEY:-}"
 AMG_ENDPOINT="${AMG_ENDPOINT:-}"
-TEAMS_WEBHOOK_URL="${TEAMS_WEBHOOK_URL:-}"
-ALERT_EMAIL_RECIPIENTS="${ALERT_EMAIL_RECIPIENTS:-}"
+STAKING_ALERT_TOPIC_ARN="${STAKING_ALERT_TOPIC_ARN:-}"
+STAKING_ALERT_CRITICAL_TOPIC_ARN="${STAKING_ALERT_CRITICAL_TOPIC_ARN:-}"
 
 # Check for required tools
 for tool in aws curl jq; do
@@ -45,13 +46,19 @@ done
 # Check for required environment variables
 if [ -z "$AMG_WORKSPACE_ID" ]; then
     echo -e "${RED}✗ AMG_WORKSPACE_ID environment variable is not set${NC}"
-    echo "Usage: AMG_WORKSPACE_ID=g-xxx TEAMS_WEBHOOK_URL=https://... ./scripts/deploy-notifications-amg.sh"
+    echo "Usage: AMG_WORKSPACE_ID=g-xxx ./scripts/deploy-notifications-amg.sh"
     exit 1
 fi
 
-if [ -z "$TEAMS_WEBHOOK_URL" ]; then
-    echo -e "${RED}✗ TEAMS_WEBHOOK_URL environment variable is not set${NC}"
-    echo "Set your Microsoft Teams incoming webhook URL in .env or environment"
+if [ -z "$STAKING_ALERT_TOPIC_ARN" ]; then
+    echo -e "${RED}✗ STAKING_ALERT_TOPIC_ARN is not set${NC}"
+    echo "Run deploy-sns-lambda.sh first, then set STAKING_ALERT_TOPIC_ARN in .env"
+    exit 1
+fi
+
+if [ -z "$STAKING_ALERT_CRITICAL_TOPIC_ARN" ]; then
+    echo -e "${RED}✗ STAKING_ALERT_CRITICAL_TOPIC_ARN is not set${NC}"
+    echo "Run deploy-sns-lambda.sh first, then set STAKING_ALERT_CRITICAL_TOPIC_ARN in .env"
     exit 1
 fi
 
@@ -109,78 +116,98 @@ TMPFILE=$(mktemp)
 trap "rm -f $TMPFILE" EXIT
 
 # =============================================================================
+# Helper: create or update a contact point
+# =============================================================================
+deploy_contact_point() {
+    local CP_NAME="$1"
+    local CP_PAYLOAD="$2"
+
+    echo "  Creating contact point: ${CP_NAME}..."
+
+    HTTP_CODE=$(curl -s -w "%{http_code}" -o "$TMPFILE" \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${AMG_API_KEY}" \
+        -d "$CP_PAYLOAD" \
+        "${GRAFANA_URL}/api/v1/provisioning/contact-points" 2>/dev/null || echo "000")
+
+    if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+        echo -e "    ${GREEN}✓ Created${NC}"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        return
+    fi
+
+    if [ "$HTTP_CODE" = "409" ]; then
+        # Already exists - try to update
+        EXISTING=$(curl -s \
+            -H "Authorization: Bearer ${AMG_API_KEY}" \
+            "${GRAFANA_URL}/api/v1/provisioning/contact-points" 2>/dev/null || echo "[]")
+        EXISTING_UID=$(echo "$EXISTING" | jq -r ".[] | select(.name == \"${CP_NAME}\") | .uid" | head -1)
+
+        if [ -n "$EXISTING_UID" ] && [ "$EXISTING_UID" != "null" ]; then
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o "$TMPFILE" \
+                -X PUT \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${AMG_API_KEY}" \
+                -d "$CP_PAYLOAD" \
+                "${GRAFANA_URL}/api/v1/provisioning/contact-points/${EXISTING_UID}" 2>/dev/null || echo "000")
+
+            if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ]; then
+                echo -e "    ${GREEN}✓ Updated${NC}"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                return
+            fi
+        fi
+
+        echo -e "    ${YELLOW}⚠ Already exists${NC}"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        return
+    fi
+
+    echo -e "    ${RED}✗ Failed (HTTP ${HTTP_CODE})${NC}"
+    jq -r '.message // .' "$TMPFILE" 2>/dev/null || cat "$TMPFILE"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+}
+
+# =============================================================================
 # Deploy Contact Points
 # =============================================================================
 
 echo "Deploying contact points..."
 
-# --- Teams Webhook (via Slack type) ---
-# AMG does not support 'webhook' or 'teams' types.
-# Using 'slack' type which sends HTTP POST to the Teams Workflow URL.
-echo "  Creating contact point: teams-webhook (via slack type)..."
-
+# --- SNS Teams Contact Point ---
 TEAMS_PAYLOAD=$(jq -n \
-    --arg url "$TEAMS_WEBHOOK_URL" \
+    --arg topic "$STAKING_ALERT_TOPIC_ARN" \
+    --arg region "$AMG_REGION" \
     '{
-        name: "teams-webhook",
-        type: "slack",
+        name: "sns-teams",
+        type: "sns",
         settings: {
-            url: $url,
-            title: "{{ .CommonLabels.alertname }}",
-            text: "**Status:** {{ .Status | toUpper }}\n**Severity:** {{ .CommonLabels.severity }}\n**Instance:** {{ .CommonLabels.instance }}\n\n{{ .CommonAnnotations.summary }}\n\n{{ .CommonAnnotations.description }}"
+            topic: $topic,
+            authProvider: "default",
+            sigV4Region: $region
         },
         disableResolveMessage: false
     }')
 
-HTTP_CODE=$(curl -s -w "%{http_code}" -o "$TMPFILE" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer ${AMG_API_KEY}" \
-    -d "$TEAMS_PAYLOAD" \
-    "${GRAFANA_URL}/api/v1/provisioning/contact-points" 2>/dev/null || echo "000")
+deploy_contact_point "sns-teams" "$TEAMS_PAYLOAD"
 
-if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-    echo -e "    ${GREEN}✓ Created${NC}"
-    SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-elif [ "$HTTP_CODE" = "409" ]; then
-    # Already exists - try to update
-    EXISTING=$(curl -s \
-        -H "Authorization: Bearer ${AMG_API_KEY}" \
-        "${GRAFANA_URL}/api/v1/provisioning/contact-points" 2>/dev/null || echo "[]")
-    EXISTING_UID=$(echo "$EXISTING" | jq -r '.[] | select(.name == "teams-webhook") | .uid' | head -1)
+# --- SNS Email Contact Point (critical alerts -> Teams + Email) ---
+EMAIL_PAYLOAD=$(jq -n \
+    --arg topic "$STAKING_ALERT_CRITICAL_TOPIC_ARN" \
+    --arg region "$AMG_REGION" \
+    '{
+        name: "sns-email",
+        type: "sns",
+        settings: {
+            topic: $topic,
+            authProvider: "default",
+            sigV4Region: $region
+        },
+        disableResolveMessage: false
+    }')
 
-    if [ -n "$EXISTING_UID" ] && [ "$EXISTING_UID" != "null" ]; then
-        HTTP_CODE=$(curl -s -w "%{http_code}" -o "$TMPFILE" \
-            -X PUT \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${AMG_API_KEY}" \
-            -d "$TEAMS_PAYLOAD" \
-            "${GRAFANA_URL}/api/v1/provisioning/contact-points/${EXISTING_UID}" 2>/dev/null || echo "000")
-
-        if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo -e "    ${GREEN}✓ Updated${NC}"
-            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-        else
-            echo -e "    ${RED}✗ Failed to update (HTTP ${HTTP_CODE})${NC}"
-            jq -r '.message // .' "$TMPFILE" 2>/dev/null || cat "$TMPFILE"
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-        fi
-    else
-        echo -e "    ${YELLOW}⚠ Already exists${NC}"
-        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-    fi
-else
-    echo -e "    ${RED}✗ Failed (HTTP ${HTTP_CODE})${NC}"
-    jq -r '.message // .' "$TMPFILE" 2>/dev/null || cat "$TMPFILE"
-    FAIL_COUNT=$((FAIL_COUNT + 1))
-fi
-
-# --- SNS Email Contact Point (optional) ---
-# Uses the existing SNS topic for email delivery
-if [ -n "$ALERT_EMAIL_RECIPIENTS" ]; then
-    echo "  ${YELLOW}⚠ Email notifications require SNS topic configuration in AMG${NC}"
-    echo "    Set up an SNS topic with email subscriptions and configure as a contact point in the Grafana UI"
-fi
+deploy_contact_point "sns-email" "$EMAIL_PAYLOAD"
 
 # =============================================================================
 # Deploy Notification Policies
@@ -189,18 +216,16 @@ fi
 echo ""
 echo "Deploying notification policies..."
 
-# Route all alerts through teams-webhook
-# Critical alerts also go to grafana-default-sns (if configured)
 POLICIES=$(cat <<'POLICIES_EOF'
 {
-  "receiver": "teams-webhook",
+  "receiver": "sns-teams",
   "group_by": ["alertname", "instance"],
   "group_wait": "30s",
   "group_interval": "5m",
   "repeat_interval": "4h",
   "routes": [
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=critical"],
       "continue": true,
       "group_wait": "10s",
@@ -208,21 +233,21 @@ POLICIES=$(cat <<'POLICIES_EOF'
       "repeat_interval": "1h"
     },
     {
-      "receiver": "grafana-default-sns",
+      "receiver": "sns-email",
       "matchers": ["severity=critical"],
       "group_wait": "10s",
       "group_interval": "5m",
       "repeat_interval": "4h"
     },
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=high"],
       "group_wait": "30s",
       "group_interval": "5m",
       "repeat_interval": "4h"
     },
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=warning"],
       "group_wait": "60s",
       "group_interval": "5m",

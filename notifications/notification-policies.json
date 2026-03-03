@@ -1,12 +1,12 @@
 {
-  "receiver": "teams-webhook",
+  "receiver": "sns-teams",
   "group_by": ["alertname", "instance"],
   "group_wait": "30s",
   "group_interval": "5m",
   "repeat_interval": "4h",
   "routes": [
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=critical"],
       "continue": true,
       "group_wait": "10s",
@@ -14,21 +14,21 @@
       "repeat_interval": "1h"
     },
     {
-      "receiver": "ses-email",
+      "receiver": "sns-email",
       "matchers": ["severity=critical"],
       "group_wait": "10s",
       "group_interval": "5m",
       "repeat_interval": "4h"
     },
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=high"],
       "group_wait": "30s",
       "group_interval": "5m",
       "repeat_interval": "4h"
     },
     {
-      "receiver": "teams-webhook",
+      "receiver": "sns-teams",
       "matchers": ["severity=warning"],
       "group_wait": "60s",
       "group_interval": "5m",

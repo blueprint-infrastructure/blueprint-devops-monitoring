@@ -35,6 +35,7 @@ fi
 
 # Parse command line arguments
 SKIP_VALIDATION=false
+DEPLOY_INFRA=true
 DEPLOY_NOTIFICATIONS=true
 DEPLOY_DASHBOARDS=true
 DEPLOY_ALERTS=true
@@ -45,17 +46,26 @@ while [[ $# -gt 0 ]]; do
             SKIP_VALIDATION=true
             shift
             ;;
+        --infra-only)
+            DEPLOY_NOTIFICATIONS=false
+            DEPLOY_DASHBOARDS=false
+            DEPLOY_ALERTS=false
+            shift
+            ;;
         --notifications-only)
+            DEPLOY_INFRA=false
             DEPLOY_DASHBOARDS=false
             DEPLOY_ALERTS=false
             shift
             ;;
         --dashboards-only)
+            DEPLOY_INFRA=false
             DEPLOY_NOTIFICATIONS=false
             DEPLOY_ALERTS=false
             shift
             ;;
         --alerts-only)
+            DEPLOY_INFRA=false
             DEPLOY_NOTIFICATIONS=false
             DEPLOY_DASHBOARDS=false
             shift
@@ -65,6 +75,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --skip-validation    Skip pre-deployment validation"
+            echo "  --infra-only         Deploy only SNS + Lambda infrastructure"
             echo "  --notifications-only Deploy only notification contact points and policies"
             echo "  --dashboards-only    Deploy only dashboards"
             echo "  --alerts-only        Deploy only alert rules"
@@ -108,16 +119,37 @@ if [ -z "${AMG_WORKSPACE_ID:-}" ]; then
     exit 1
 fi
 
-# Deploy notifications (contact points + policies) first
+# Deploy SNS + Lambda infrastructure (required for notifications)
+if [ "$DEPLOY_INFRA" = true ]; then
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Deploying Alert Notification Infrastructure${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    if [ -z "${TEAMS_WEBHOOK_URL:-}" ]; then
+        echo -e "${YELLOW}⚠ TEAMS_WEBHOOK_URL not set, skipping infrastructure deployment${NC}"
+        echo "  Set TEAMS_WEBHOOK_URL in .env to deploy SNS topics and Lambda function"
+    else
+        if "${SCRIPT_DIR}/deploy-sns-lambda.sh"; then
+            echo -e "${GREEN}✓ Infrastructure deployed successfully${NC}"
+        else
+            echo -e "${RED}✗ Infrastructure deployment failed${NC}"
+            exit 1
+        fi
+    fi
+    echo ""
+fi
+
+# Deploy notifications (contact points + policies)
 if [ "$DEPLOY_NOTIFICATIONS" = true ]; then
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}Deploying Notifications to AMG${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
 
-    if [ -z "${TEAMS_WEBHOOK_URL:-}" ]; then
-        echo -e "${YELLOW}⚠ TEAMS_WEBHOOK_URL not set, skipping notification deployment${NC}"
-        echo "  Set TEAMS_WEBHOOK_URL in .env to deploy contact points and policies"
+    if [ -z "${STAKING_ALERT_TOPIC_ARN:-}" ]; then
+        echo -e "${YELLOW}⚠ STAKING_ALERT_TOPIC_ARN not set, skipping notification deployment${NC}"
+        echo "  Run deploy-sns-lambda.sh first, then set STAKING_ALERT_TOPIC_ARN in .env"
     else
         if "${SCRIPT_DIR}/deploy-notifications-amg.sh"; then
             echo -e "${GREEN}✓ Notifications deployed successfully${NC}"
