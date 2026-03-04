@@ -5,7 +5,7 @@
 #
 # Architecture:
 #   AMG Alert -> SNS Topic -> Lambda -> Teams (Adaptive Card)
-#                          -> Email Subscriptions (native SNS)
+#                                    -> SES Email (critical alerts only)
 #
 # Usage:
 #   ./scripts/deploy-sns-lambda.sh           # Deploy infrastructure
@@ -33,6 +33,7 @@ NC='\033[0m' # No Color
 AMG_WORKSPACE_ID="${AMG_WORKSPACE_ID:-}"
 AMG_REGION="${AMG_REGION:-${AWS_REGION:-us-east-1}}"
 TEAMS_WEBHOOK_URL="${TEAMS_WEBHOOK_URL:-}"
+ALERT_EMAIL_SENDER="${ALERT_EMAIL_SENDER:-}"
 ALERT_EMAIL_RECIPIENTS="${ALERT_EMAIL_RECIPIENTS:-}"
 SNS_TOPIC_NAME="${SNS_TOPIC_NAME:-staking-alert}"
 SNS_CRITICAL_TOPIC_NAME="${SNS_CRITICAL_TOPIC_NAME:-staking-alert-critical}"
@@ -213,6 +214,28 @@ else
     fi
 fi
 
+# Add SES send permission (idempotent - put-role-policy overwrites)
+if [ -n "$ALERT_EMAIL_SENDER" ]; then
+    echo -e "  Adding SES send permission..."
+    SES_POLICY=$(jq -n '{
+        Version: "2012-10-17",
+        Statement: [{
+            Effect: "Allow",
+            Action: ["ses:SendEmail", "ses:SendRawEmail"],
+            Resource: "*"
+        }]
+    }')
+
+    if aws iam put-role-policy \
+        --role-name "$LAMBDA_ROLE_NAME" \
+        --policy-name "ses-send-email" \
+        --policy-document "$SES_POLICY" 2>/dev/null; then
+        echo -e "  ${GREEN}✓ SES send permission added${NC}"
+    else
+        echo -e "  ${YELLOW}⚠ Could not add SES permission (may need manual IAM access)${NC}"
+    fi
+fi
+
 # =============================================================================
 # Step 4: Create or Update Lambda Function
 # =============================================================================
@@ -232,7 +255,19 @@ else
     (cd "$TMPDIR" && zip -qr function.zip handler.py)
 
     # Build environment JSON via jq to safely handle special chars in URLs
-    LAMBDA_ENV=$(jq -n --arg url "$TEAMS_WEBHOOK_URL" '{ Variables: { TEAMS_WEBHOOK_URL: $url } }')
+    LAMBDA_ENV=$(jq -n \
+        --arg url "$TEAMS_WEBHOOK_URL" \
+        --arg sender "${ALERT_EMAIL_SENDER:-}" \
+        --arg recipients "${ALERT_EMAIL_RECIPIENTS:-}" \
+        --arg critical_topic "$SNS_CRITICAL_TOPIC_ARN" \
+        '{
+            Variables: {
+                TEAMS_WEBHOOK_URL: $url,
+                ALERT_EMAIL_SENDER: $sender,
+                ALERT_EMAIL_RECIPIENTS: $recipients,
+                STAKING_ALERT_CRITICAL_TOPIC_ARN: $critical_topic
+            }
+        }')
 
     if aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" --region "$AMG_REGION" &>/dev/null; then
         # Update existing function
@@ -343,40 +378,14 @@ for TOPIC_ARN in "$SNS_TOPIC_ARN" "$SNS_CRITICAL_TOPIC_ARN"; do
 done
 
 # =============================================================================
-# Step 6: Subscribe Email Recipients to Critical Topic
+# Step 6: SES Email Configuration Summary
 # =============================================================================
 
-if [ -n "$ALERT_EMAIL_RECIPIENTS" ]; then
-    echo ""
-    echo "Subscribing email recipients to ${SNS_CRITICAL_TOPIC_NAME}..."
-
-    IFS=',' read -ra EMAILS <<< "$ALERT_EMAIL_RECIPIENTS"
-    for email in "${EMAILS[@]}"; do
-        email=$(echo "$email" | tr -d ' ')
-        [ -z "$email" ] && continue
-
-        EXISTING=$(aws sns list-subscriptions-by-topic \
-            --topic-arn "$SNS_CRITICAL_TOPIC_ARN" \
-            --region "$AMG_REGION" \
-            --query "Subscriptions[?Protocol=='email' && Endpoint=='${email}'].SubscriptionArn" \
-            --output text 2>/dev/null || echo "")
-
-        if [ -n "$EXISTING" ] && [ "$EXISTING" != "None" ] && [ "$EXISTING" != "PendingConfirmation" ] && [ "$EXISTING" != "" ]; then
-            echo -e "  ${GREEN}✓ Already subscribed: ${email}${NC}"
-        else
-            if aws sns subscribe \
-                --topic-arn "$SNS_CRITICAL_TOPIC_ARN" \
-                --protocol email \
-                --notification-endpoint "$email" \
-                --region "$AMG_REGION" >/dev/null 2>&1; then
-                echo -e "  ${YELLOW}⏳ Confirmation email sent to: ${email}${NC}"
-                echo -e "     Recipient must click the confirmation link to activate"
-            else
-                echo -e "  ${RED}✗ Failed to subscribe: ${email}${NC}"
-                FAIL_COUNT=$((FAIL_COUNT + 1))
-            fi
-        fi
-    done
+echo ""
+if [ -n "$ALERT_EMAIL_SENDER" ] && [ -n "$ALERT_EMAIL_RECIPIENTS" ]; then
+    echo -e "  ${GREEN}✓ SES email: ${ALERT_EMAIL_SENDER} -> ${ALERT_EMAIL_RECIPIENTS}${NC}"
+else
+    echo -e "  ${YELLOW}⚠ SES email not configured (set ALERT_EMAIL_SENDER and ALERT_EMAIL_RECIPIENTS in .env)${NC}"
 fi
 
 # =============================================================================
