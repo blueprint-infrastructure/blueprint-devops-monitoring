@@ -1029,7 +1029,7 @@
           "refId": "D"
         },
         {
-          "expr": "audius_network_height{chain=\"audius\",instance=~\"$instance\"} - audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
+          "expr": "scalar(max(audius_network_height{chain=\"audius\"})) - audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Audius)",
           "refId": "E"
         }
