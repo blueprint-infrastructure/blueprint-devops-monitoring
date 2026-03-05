@@ -3,7 +3,7 @@
   "tags": ["infrastructure", "nodes"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 3,
+  "version": 5,
   "refresh": "30s",
   "panels": [
     {
@@ -817,6 +817,187 @@
       ]
     },
     {
+      "id": 24,
+      "title": "Audius Nodes",
+      "type": "table",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "expr": "up{chain=\"audius\",instance=~\"$instance\",instance!~\"localhost.*\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "audius_node_ready{chain=\"audius\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "audius_node_synced{chain=\"audius\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "label_replace(audius_node_info{chain=\"audius\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "label_replace(audius_latest_version_info{chain=\"audius\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "expr": "audius_peers_total{chain=\"audius\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        },
+        {
+          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"} * 0 + scalar(max(audius_network_height{chain=\"audius\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "audius_peers_p2p_connected{chain=\"audius\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Ready" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Not Ready", "color": "red" }, "1": { "text": "Ready", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Synced" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
+              { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Syncing", "color": "yellow" }, "1": { "text": "Synced", "color": "green" } } }] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Chain Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Network Height" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Latest Version" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "instance" }],
+        "cellHeight": "sm",
+        "footer": { "show": false }
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": { "aggregations": [], "operation": "groupby" },
+              "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "indexByName": {
+              "instance": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "node_version (lastNotNull)": 4,
+              "latest_version (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Status",
+              "Value #B (lastNotNull)": "Ready",
+              "Value #C (lastNotNull)": "Synced",
+              "node_version (lastNotNull)": "Version",
+              "latest_version (lastNotNull)": "Latest Version",
+              "Value #F (lastNotNull)": "Peers",
+              "Value #G (lastNotNull)": "Chain Height",
+              "Value #H (lastNotNull)": "Network Height",
+              "Value #I (lastNotNull)": "P2P Connected"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": 14,
       "title": "Blocks Behind by Node",
       "type": "timeseries",
@@ -824,7 +1005,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 21
       },
       "targets": [
         {
@@ -846,6 +1027,11 @@
           "expr": "algorand_node_rounds_behind{chain=\"algorand\",instance=~\"$instance\"}",
           "legendFormat": "{{instance}} (Algorand)",
           "refId": "D"
+        },
+        {
+          "expr": "audius_network_height{chain=\"audius\",instance=~\"$instance\"} - audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} (Audius)",
+          "refId": "E"
         }
       ],
       "fieldConfig": {
@@ -896,7 +1082,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 29
       },
       "targets": [
         {
@@ -952,7 +1138,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 37
       },
       "targets": [
         {
@@ -1010,7 +1196,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 37
       },
       "targets": [
         {
@@ -1068,7 +1254,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 45
       },
       "targets": [
         {
@@ -1126,7 +1312,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 45
       },
       "targets": [
         {
@@ -1183,7 +1369,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 53
       },
       "targets": [
         {
@@ -1240,7 +1426,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 53
       },
       "targets": [
         {

@@ -49,7 +49,8 @@ monitoring/
 │   ├── install-ethereum-monitoring.sh
 │   ├── install-solana-monitoring.sh
 │   ├── install-avalanche-monitoring.sh
-│   └── install-algorand-monitoring.sh
+│   ├── install-algorand-monitoring.sh
+│   └── install-audius-monitoring.sh
 └── scripts/                 # Deployment scripts
     ├── validate.sh          # Local validation script
     ├── deploy.sh            # Master deployment script
@@ -187,6 +188,27 @@ The deployment scripts require:
 - `grafana:CreateWorkspaceApiKey`
 - `grafana:DescribeWorkspace`
 - Grafana API permissions for dashboard/alert/notification management
+
+## Node Agent Deployment
+
+The monitoring agent scripts in `agents/` are uploaded to S3 and then downloaded onto target nodes for execution.
+
+**S3 location:** `s3://blueprint-infra-devops/agents/`
+
+**Deploy to a node:**
+```bash
+# On the target node, download and run the install script
+aws s3 cp s3://blueprint-infra-devops/agents/install-<chain>-monitoring.sh /tmp/ && \
+  chmod +x /tmp/install-<chain>-monitoring.sh && \
+  sudo /tmp/install-<chain>-monitoring.sh
+```
+
+**Upload updated scripts to S3:**
+```bash
+aws s3 cp agents/install-<chain>-monitoring.sh s3://blueprint-infra-devops/agents/
+```
+
+Each script installs three components: node_exporter (system metrics), a chain-specific collector (business metrics), and Grafana Agent (pushes to AMP via SigV4).
 
 ## Conventions
 
