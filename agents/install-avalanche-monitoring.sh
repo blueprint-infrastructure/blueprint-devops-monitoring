@@ -214,29 +214,17 @@ EXTERNAL_DATA_CACHE="/tmp/avalanche_external_data.cache"
 EXTERNAL_DATA_INTERVAL=300  # 5 minutes
 
 # Cached values
-CACHED_LATEST_VERSION=""
 CACHED_NETWORK_HEIGHT=""
 LAST_EXTERNAL_FETCH=0
 
-# Fetch external data (GitHub latest version, network height)
+# Fetch external data (network height from public RPC)
 fetch_external_data() {
     local now=$(date +%s)
     local cache_age=$((now - LAST_EXTERNAL_FETCH))
 
     # Only fetch if cache is older than EXTERNAL_DATA_INTERVAL
-    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_LATEST_VERSION" ]]; then
+    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_NETWORK_HEIGHT" ]]; then
         return 0
-    fi
-
-    # Fetch latest release version from GitHub
-    local github_response
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/ava-labs/avalanchego/releases/latest" 2>/dev/null || echo '{}')
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        # Handle both "tag_name":"v1.14.1" and "tag_name": "v1.14.1" formats
-        CACHED_LATEST_VERSION=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "unknown")
     fi
 
     # Fetch network block height from public RPC
@@ -484,26 +472,10 @@ EOF
         node_version=$(echo "$version_response" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 | sed 's|.*/||' || echo "unknown")
     fi
 
-    cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP avalanche_node_version_info Avalanche node version
-# TYPE avalanche_node_version_info gauge
-avalanche_node_version_info{version="${node_version}"} 1
-
-EOF
-
     # =========================================================================
-    # External Data (latest version, network height)
+    # External Data (network height)
     # =========================================================================
     fetch_external_data
-
-    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
-        cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP avalanche_latest_version_info Latest stable version from GitHub
-# TYPE avalanche_latest_version_info gauge
-avalanche_latest_version_info{version="${CACHED_LATEST_VERSION}"} 1
-
-EOF
-    fi
 
     if [[ -n "$CACHED_NETWORK_HEIGHT" ]] && [[ "$CACHED_NETWORK_HEIGHT" -gt 0 ]]; then
         cat >> "$METRICS_FILE_TMP" <<EOF

@@ -250,25 +250,7 @@ EXTERNAL_DATA_FILE="/tmp/algorand_external_data.cache"
 EXTERNAL_DATA_INTERVAL=300  # 5 minutes
 
 # Cached external data (populated by fetch_external_data)
-CACHED_LATEST_VERSION=""
 CACHED_NETWORK_ROUND=""
-
-# Fetch latest version from GitHub
-fetch_latest_version() {
-    local latest_version=""
-    local github_response
-
-    # Try GitHub API for go-algorand releases
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/algorand/go-algorand/releases/latest" 2>/dev/null || echo "{}")
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        latest_version=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "")
-    fi
-
-    echo "$latest_version"
-}
 
 # Fetch network round from Algorand public API
 fetch_network_round() {
@@ -299,37 +281,24 @@ fetch_network_round() {
 fetch_external_data() {
     local current_time=$(date +%s)
     local cache_time=0
-    local cached_version=""
     local cached_round=""
 
     # Read cache if exists
     if [[ -f "$EXTERNAL_DATA_FILE" ]]; then
         cache_time=$(head -1 "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "0")
-        cached_version=$(sed -n '2p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
-        cached_round=$(sed -n '3p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
+        cached_round=$(sed -n '2p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
     fi
 
     # Check if cache is still valid
     local cache_age=$((current_time - cache_time))
-    if [[ "$cache_age" -lt "$EXTERNAL_DATA_INTERVAL" ]] && [[ -n "$cached_version" || -n "$cached_round" ]]; then
-        CACHED_LATEST_VERSION="$cached_version"
+    if [[ "$cache_age" -lt "$EXTERNAL_DATA_INTERVAL" ]] && [[ -n "$cached_round" ]]; then
         CACHED_NETWORK_ROUND="$cached_round"
         return 0
     fi
 
     # Fetch fresh data
-    local new_version
     local new_round
-
-    new_version=$(fetch_latest_version)
     new_round=$(fetch_network_round)
-
-    # Use new data if available, otherwise keep cached
-    if [[ -n "$new_version" ]]; then
-        CACHED_LATEST_VERSION="$new_version"
-    else
-        CACHED_LATEST_VERSION="$cached_version"
-    fi
 
     if [[ -n "$new_round" ]]; then
         CACHED_NETWORK_ROUND="$new_round"
@@ -340,7 +309,6 @@ fetch_external_data() {
     # Update cache file
     {
         echo "$current_time"
-        echo "$CACHED_LATEST_VERSION"
         echo "$CACHED_NETWORK_ROUND"
     } > "$EXTERNAL_DATA_FILE"
 }
@@ -592,23 +560,6 @@ EOF
         patch=$(echo "$version_response" | grep -o '"patch":[0-9]*' | cut -d':' -f2 || echo "0")
         build_version="${major}.${minor}.${patch}"
     fi
-
-    # Latest version from GitHub
-    local latest_version="unknown"
-    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
-        latest_version="$CACHED_LATEST_VERSION"
-    fi
-
-    cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP algorand_node_version_info Algorand node version
-# TYPE algorand_node_version_info gauge
-algorand_node_version_info{version="${build_version}"} 1
-
-# HELP algorand_latest_version_info Latest Algorand version from GitHub
-# TYPE algorand_latest_version_info gauge
-algorand_latest_version_info{version="${latest_version}"} 1
-
-EOF
 
     # =========================================================================
     # Collector metadata
@@ -923,5 +874,4 @@ echo "  #   algorand_node_healthy"
 echo "  #   algorand_node_synced"
 echo "  #   algorand_network_round"
 echo "  #   algorand_node_rounds_behind"
-echo "  #   algorand_latest_version_info"
 echo ""

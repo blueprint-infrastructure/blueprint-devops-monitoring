@@ -213,7 +213,6 @@ METRICS_FILE_TMP="/tmp/solana_collector_metrics.prom.tmp"
 EXTERNAL_DATA_INTERVAL=300  # 5 minutes
 
 # Cached values
-CACHED_LATEST_VERSION=""
 CACHED_NETWORK_SLOT=""
 CACHED_CLIENT_TYPE=""  # "agave" or "firedancer"
 LAST_EXTERNAL_FETCH=0
@@ -251,36 +250,14 @@ detect_client_type() {
     fi
 }
 
-# Fetch external data (GitHub latest version, network slot from public RPC)
+# Fetch external data (network slot from public RPC)
 fetch_external_data() {
     local now=$(date +%s)
     local cache_age=$((now - LAST_EXTERNAL_FETCH))
 
     # Only fetch if cache is older than EXTERNAL_DATA_INTERVAL
-    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_LATEST_VERSION" ]]; then
+    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_NETWORK_SLOT" ]]; then
         return 0
-    fi
-
-    # Detect client type first
-    detect_client_type
-
-    # Fetch latest release version from GitHub based on client type
-    local github_response
-    local github_repo
-
-    if [[ "$CACHED_CLIENT_TYPE" == "firedancer" ]]; then
-        github_repo="firedancer-io/firedancer"
-    else
-        github_repo="anza-xyz/agave"
-    fi
-
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/${github_repo}/releases/latest" 2>/dev/null || echo '{}')
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        # Handle both "tag_name":"v1.18.x" and "tag_name": "v1.18.x" formats
-        CACHED_LATEST_VERSION=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"v[^"]*"' | tr -d '"' | sed 's/^v//' || echo "unknown")
     fi
 
     # Fetch network block height from public Solana mainnet RPC
@@ -625,27 +602,6 @@ EOF
             # Fallback to solana CLI version
             solana_version=$(solana --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
         fi
-    fi
-
-    cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP solana_node_version_info Solana node version
-# TYPE solana_node_version_info gauge
-solana_node_version_info{version="${solana_version}"} 1
-
-EOF
-
-    # =========================================================================
-    # External Data (latest version, network block height)
-    # =========================================================================
-    # fetch_external_data is called at the start of collect_metrics()
-
-    if [[ -n "$CACHED_LATEST_VERSION" ]]; then
-        cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP solana_latest_version_info Latest stable version from GitHub
-# TYPE solana_latest_version_info gauge
-solana_latest_version_info{version="${CACHED_LATEST_VERSION}"} 1
-
-EOF
     fi
 
     if [[ -n "$CACHED_NETWORK_SLOT" ]] && [[ "$CACHED_NETWORK_SLOT" -gt 0 ]]; then

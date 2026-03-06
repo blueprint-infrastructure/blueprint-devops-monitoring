@@ -301,42 +301,6 @@
       }
     },
     {
-      "id": 6,
-      "title": "Canton Version",
-      "type": "stat",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 21,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$datasource"
-      },
-      "targets": [
-        {
-          "expr": "canton_build_info{instance=~\"$instance\"} or vector(0.54)",
-          "legendFormat": "Current: {{version}} | Latest: {{version}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "unit": "none",
-          "decimals": 2
-        }
-      },
-      "options": {
-        "graphMode": "none",
-        "colorMode": "value",
-        "orientation": "auto",
-        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
-        "textMode": "value"
-      }
-    },
-    {
       "id": 7,
       "title": "Claims ETH Balance",
       "type": "stat",
@@ -426,7 +390,7 @@
       "title": "Audius Content Health",
       "type": "table",
       "gridPos": {
-        "h": 6,
+        "h": 3,
         "w": 3,
         "x": 21,
         "y": 6
@@ -713,42 +677,6 @@
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
       }
-    },
-    {
-      "id": 16,
-      "title": "Algo Version",
-      "type": "table",
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 16
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$datasource"
-      },
-      "targets": [
-        {
-          "expr": "algod_version_info{instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": { "align": "auto", "displayMode": "color-text" },
-          "color": { "mode": "fixed", "fixedColor": "green" }
-        },
-        "overrides": [
-          { "matcher": { "id": "byName", "options": "Time" }, "properties": [{ "id": "custom.hidden", "value": true }] },
-          { "matcher": { "id": "byName", "options": "__name__" }, "properties": [{ "id": "custom.hidden", "value": true }] },
-          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "custom.hidden", "value": true }] },
-          { "matcher": { "id": "byName", "options": "job" }, "properties": [{ "id": "custom.hidden", "value": true }] }
-        ]
-      },
-      "options": { "showHeader": true, "cellHeight": "sm" }
     },
     {
       "id": 17,

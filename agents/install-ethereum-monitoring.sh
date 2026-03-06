@@ -116,41 +116,7 @@ EXTERNAL_DATA_FILE="/tmp/ethereum_external_data.cache"
 EXTERNAL_DATA_INTERVAL=300  # 5 minutes
 
 # Cached external data
-CACHED_BESU_LATEST_VERSION=""
-CACHED_TEKU_LATEST_VERSION=""
 CACHED_NETWORK_BLOCK_HEIGHT=""
-
-# Fetch latest Besu version from GitHub
-fetch_besu_latest_version() {
-    local latest_version=""
-    local github_response
-
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/hyperledger/besu/releases/latest" 2>/dev/null || echo "{}")
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        latest_version=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[0-9][^"]*"' | tr -d '"' || echo "")
-    fi
-
-    echo "$latest_version"
-}
-
-# Fetch latest Teku version from GitHub
-fetch_teku_latest_version() {
-    local latest_version=""
-    local github_response
-
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/Consensys/teku/releases/latest" 2>/dev/null || echo "{}")
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        latest_version=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[0-9][^"]*"' | tr -d '"' || echo "")
-    fi
-
-    echo "$latest_version"
-}
 
 # Fetch network block height from public API
 fetch_network_block_height() {
@@ -194,44 +160,30 @@ fetch_network_block_height() {
 fetch_external_data() {
     local current_time=$(date +%s)
     local cache_time=0
-    local cached_besu=""
-    local cached_teku=""
     local cached_block=""
 
     # Read cache if exists
     if [[ -f "$EXTERNAL_DATA_FILE" ]]; then
         cache_time=$(sed -n '1p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "0")
-        cached_besu=$(sed -n '2p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
-        cached_teku=$(sed -n '3p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
-        cached_block=$(sed -n '4p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
+        cached_block=$(sed -n '2p' "$EXTERNAL_DATA_FILE" 2>/dev/null || echo "")
     fi
 
     # Check if cache is still valid
     local cache_age=$((current_time - cache_time))
-    if [[ "$cache_age" -lt "$EXTERNAL_DATA_INTERVAL" ]] && [[ -n "$cached_besu" || -n "$cached_teku" || -n "$cached_block" ]]; then
-        CACHED_BESU_LATEST_VERSION="$cached_besu"
-        CACHED_TEKU_LATEST_VERSION="$cached_teku"
+    if [[ "$cache_age" -lt "$EXTERNAL_DATA_INTERVAL" ]] && [[ -n "$cached_block" ]]; then
         CACHED_NETWORK_BLOCK_HEIGHT="$cached_block"
         return 0
     fi
 
     # Fetch fresh data
-    local new_besu new_teku new_block
-
-    new_besu=$(fetch_besu_latest_version)
-    new_teku=$(fetch_teku_latest_version)
+    local new_block
     new_block=$(fetch_network_block_height)
 
-    # Use new data if available, otherwise keep cached
-    CACHED_BESU_LATEST_VERSION="${new_besu:-$cached_besu}"
-    CACHED_TEKU_LATEST_VERSION="${new_teku:-$cached_teku}"
     CACHED_NETWORK_BLOCK_HEIGHT="${new_block:-$cached_block}"
 
     # Update cache file
     {
         echo "$current_time"
-        echo "$CACHED_BESU_LATEST_VERSION"
-        echo "$CACHED_TEKU_LATEST_VERSION"
         echo "$CACHED_NETWORK_BLOCK_HEIGHT"
     } > "$EXTERNAL_DATA_FILE"
 }
@@ -246,23 +198,6 @@ collect_metrics() {
 # HELP ethereum_collector_scrape_timestamp_seconds Unix timestamp of last scrape
 # TYPE ethereum_collector_scrape_timestamp_seconds gauge
 ethereum_collector_scrape_timestamp_seconds ${timestamp}
-
-EOF
-
-    # =========================================================================
-    # Latest Versions from GitHub
-    # =========================================================================
-    local besu_latest="${CACHED_BESU_LATEST_VERSION:-unknown}"
-    local teku_latest="${CACHED_TEKU_LATEST_VERSION:-unknown}"
-
-    cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP ethereum_besu_latest_version_info Latest Besu version from GitHub
-# TYPE ethereum_besu_latest_version_info gauge
-ethereum_besu_latest_version_info{version="${besu_latest}"} 1
-
-# HELP ethereum_teku_latest_version_info Latest Teku version from GitHub
-# TYPE ethereum_teku_latest_version_info gauge
-ethereum_teku_latest_version_info{version="${teku_latest}"} 1
 
 EOF
 
@@ -568,8 +503,6 @@ echo "    - beacon_*, validator_* (consensus client)"
 echo "    - node_* (system metrics)"
 echo ""
 echo "  From ethereum-collector (external data):"
-echo "    - ethereum_besu_latest_version_info     # Latest Besu from GitHub"
-echo "    - ethereum_teku_latest_version_info     # Latest Teku from GitHub"
 echo "    - ethereum_network_block_height         # Network block height"
 echo ""
 echo "Verify installation:"
@@ -586,7 +519,5 @@ echo "  # Test collector metrics"
 echo "  curl -s localhost:${COLLECTOR_PORT}/metrics"
 echo ""
 echo "  # After 1-2 minutes, verify in AMP/AMG:"
-echo "  #   ethereum_besu_latest_version_info"
-echo "  #   ethereum_teku_latest_version_info"
 echo "  #   ethereum_network_block_height"
 echo ""

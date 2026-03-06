@@ -274,7 +274,6 @@ METRICS_FILE_TMP="/tmp/audius_collector_metrics.prom.tmp"
 
 # External data cache (refreshed every 5 minutes)
 EXTERNAL_DATA_INTERVAL=300
-CACHED_LATEST_VERSION=""
 CACHED_NETWORK_HEIGHT=""
 LAST_EXTERNAL_FETCH=0
 
@@ -314,22 +313,13 @@ fetch_network_height() {
     fi
 }
 
-# Fetch latest version from GitHub and network height from public peers
+# Fetch network height from public peers (rate-limited)
 fetch_external_data() {
     local now=$(date +%s)
     local cache_age=$((now - LAST_EXTERNAL_FETCH))
 
-    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_LATEST_VERSION" ]]; then
+    if [[ $cache_age -lt $EXTERNAL_DATA_INTERVAL ]] && [[ -n "$CACHED_NETWORK_HEIGHT" ]]; then
         return 0
-    fi
-
-    local github_response
-    github_response=$(curl -s --max-time 10 \
-        -H "Accept: application/vnd.github.v3+json" \
-        "https://api.github.com/repos/AudiusProject/audius-protocol/releases/latest" 2>/dev/null || echo '{}')
-
-    if echo "$github_response" | grep -q '"tag_name"'; then
-        CACHED_LATEST_VERSION=$(echo "$github_response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/^v//' || echo "unknown")
     fi
 
     local new_height
@@ -407,16 +397,6 @@ EOF
     eth_address=$(json_val "eth_address" "$health_json")
     eth_address="${eth_address:-unknown}"
 
-    # version (from data.version)
-    local node_version
-    node_version=$(json_val "version" "$health_json")
-    node_version="${node_version:-unknown}"
-
-    # git commit
-    local git_commit
-    git_commit=$(json_val "git" "$health_json")
-    git_commit="${git_commit:-unknown}"
-
     cat >> "$METRICS_FILE_TMP" <<EOF
 # HELP audius_node_ready Whether the node is ready (1=ready, 0=not ready)
 # TYPE audius_node_ready gauge
@@ -429,10 +409,6 @@ audius_core_live ${core_live}
 # HELP audius_node_synced Whether node is synced (1=synced, 0=syncing)
 # TYPE audius_node_synced gauge
 audius_node_synced ${is_synced}
-
-# HELP audius_node_info Audius node metadata
-# TYPE audius_node_info gauge
-audius_node_info{version="${node_version}",node_type="${node_type}",endpoint="${endpoint}",eth_address="${eth_address}",git="${git_commit}"} 1
 
 # HELP audius_chain_height Current chain block height
 # TYPE audius_chain_height gauge
@@ -646,18 +622,6 @@ audius_pruning_retain_height ${current_retain_height}
 audius_pruning_earliest_height ${earliest_height}
 
 EOF
-
-    # =========================================================================
-    # External Data (latest version from GitHub)
-    # =========================================================================
-    if [[ -n "$CACHED_LATEST_VERSION" ]] && [[ "$CACHED_LATEST_VERSION" != "unknown" ]]; then
-        cat >> "$METRICS_FILE_TMP" <<EOF
-# HELP audius_latest_version_info Latest Audius protocol version from GitHub
-# TYPE audius_latest_version_info gauge
-audius_latest_version_info{version="${CACHED_LATEST_VERSION}"} 1
-
-EOF
-    fi
 
     if [[ -n "$CACHED_NETWORK_HEIGHT" ]] && [[ "$CACHED_NETWORK_HEIGHT" -gt 0 ]]; then
         cat >> "$METRICS_FILE_TMP" <<EOF
@@ -954,7 +918,6 @@ echo "  Other:"
 echo "    - audius_mempool_tx_count              # Mempool tx count"
 echo "    - audius_pruning_retain_height         # Pruning retain height"
 echo "    - audius_pruning_earliest_height       # Earliest available block"
-echo "    - audius_latest_version_info           # Latest version from GitHub"
 echo ""
 echo "  System Resources (node_exporter):"
 echo "    - node_cpu_seconds_total"

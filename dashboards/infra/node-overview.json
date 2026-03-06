@@ -36,46 +36,34 @@
           "refId": "C"
         },
         {
-          "expr": "label_replace(solana_node_version_info{chain=\"solana\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "solana_network_peers{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(solana_latest_version_info{chain=\"solana\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "solana_node_block_height{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "solana_network_peers{chain=\"solana\",instance=~\"$instance\"}",
+          "expr": "solana_network_block_height{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "solana_node_block_height{chain=\"solana\",instance=~\"$instance\"}",
+          "expr": "solana_node_epoch{chain=\"solana\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "solana_network_block_height{chain=\"solana\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "H"
-        },
-        {
-          "expr": "solana_node_epoch{chain=\"solana\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "I"
-        },
-        {
           "expr": "solana_validator_activated_stake_lamports{chain=\"solana\",instance=~\"$instance\"} / 1e9",
           "format": "table",
           "instant": true,
-          "refId": "J"
+          "refId": "H"
         }
       ],
       "fieldConfig": {
@@ -144,13 +132,6 @@
               { "id": "custom.cellOptions", "value": { "type": "color-text" } },
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
             ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Latest Version" },
-            "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
-            ]
           }
         ]
       },
@@ -170,44 +151,38 @@
               "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "excludeByName": { "Time": true },
             "indexByName": {
               "instance": 0,
               "Value #A (lastNotNull)": 1,
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
-              "node_version (lastNotNull)": 4,
-              "latest_version (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
               "Value #G (lastNotNull)": 7,
-              "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9,
-              "Value #J (lastNotNull)": 10
+              "Value #H (lastNotNull)": 8
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
-              "node_version (lastNotNull)": "Version",
-              "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peers",
-              "Value #G (lastNotNull)": "Block Height",
-              "Value #H (lastNotNull)": "Network Height",
-              "Value #I (lastNotNull)": "Epoch",
-              "Value #J (lastNotNull)": "Stake (SOL)"
+              "Value #D (lastNotNull)": "Peers",
+              "Value #E (lastNotNull)": "Block Height",
+              "Value #F (lastNotNull)": "Network Height",
+              "Value #G (lastNotNull)": "Epoch",
+              "Value #H (lastNotNull)": "Stake (SOL)"
             }
           }
         }
@@ -243,46 +218,34 @@
           "refId": "C"
         },
         {
-          "expr": "label_replace(avalanche_node_version_info{chain=\"avalanche\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "avalanche_network_peers{chain=\"avalanche\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(avalanche_latest_version_info{chain=\"avalanche\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "avalanche_c_chain_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "avalanche_network_peers{chain=\"avalanche\",instance=~\"$instance\"}",
+          "expr": "avalanche_network_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "avalanche_c_chain_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
+          "expr": "avalanche_platformvm_local_staked{chain=\"avalanche\",instance=~\"$instance\"} / 1e9",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "avalanche_network_block_height{chain=\"avalanche\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "H"
-        },
-        {
-          "expr": "avalanche_platformvm_local_staked{chain=\"avalanche\",instance=~\"$instance\"} / 1e9",
-          "format": "table",
-          "instant": true,
-          "refId": "I"
-        },
-        {
           "expr": "avalanche_uptime_rewarding_stake_percent{chain=\"avalanche\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
-          "refId": "J"
+          "refId": "H"
         }
       ],
       "fieldConfig": {
@@ -352,13 +315,6 @@
               { "id": "custom.cellOptions", "value": { "type": "color-text" } },
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
             ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Latest Version" },
-            "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
-            ]
           }
         ]
       },
@@ -378,44 +334,38 @@
               "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "excludeByName": { "Time": true },
             "indexByName": {
               "instance": 0,
               "Value #A (lastNotNull)": 1,
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
-              "node_version (lastNotNull)": 4,
-              "latest_version (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
               "Value #G (lastNotNull)": 7,
-              "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9,
-              "Value #J (lastNotNull)": 10
+              "Value #H (lastNotNull)": 8
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
-              "node_version (lastNotNull)": "Version",
-              "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peers",
-              "Value #G (lastNotNull)": "Block Height",
-              "Value #H (lastNotNull)": "Network Height",
-              "Value #I (lastNotNull)": "Stake (AVAX)",
-              "Value #J (lastNotNull)": "Rewarding %"
+              "Value #D (lastNotNull)": "Peers",
+              "Value #E (lastNotNull)": "Block Height",
+              "Value #F (lastNotNull)": "Network Height",
+              "Value #G (lastNotNull)": "Stake (AVAX)",
+              "Value #H (lastNotNull)": "Rewarding %"
             }
           }
         }
@@ -451,40 +401,28 @@
           "refId": "C"
         },
         {
-          "expr": "label_replace(algorand_node_version_info{chain=\"algorand\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "algorand_network_peers{chain=\"algorand\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(algorand_latest_version_info{chain=\"algorand\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "algorand_node_last_round{chain=\"algorand\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "algorand_network_peers{chain=\"algorand\",instance=~\"$instance\"}",
+          "expr": "algorand_network_round{chain=\"algorand\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "algorand_node_last_round{chain=\"algorand\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "G"
-        },
-        {
-          "expr": "algorand_network_round{chain=\"algorand\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "H"
-        },
-        {
           "expr": "algorand_participation_key_active{chain=\"algorand\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
-          "refId": "I"
+          "refId": "G"
         }
       ],
       "fieldConfig": {
@@ -543,13 +481,6 @@
               { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
               { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "No", "color": "yellow" }, "1": { "text": "Active", "color": "green" } } }] }
             ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Latest Version" },
-            "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
-            ]
           }
         ]
       },
@@ -569,41 +500,35 @@
               "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "excludeByName": { "Time": true },
             "indexByName": {
               "instance": 0,
               "Value #A (lastNotNull)": 1,
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
-              "node_version (lastNotNull)": 4,
-              "latest_version (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
-              "Value #G (lastNotNull)": 7,
-              "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9
+              "Value #G (lastNotNull)": 7
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Healthy",
               "Value #C (lastNotNull)": "Synced",
-              "node_version (lastNotNull)": "Version",
-              "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peers",
-              "Value #G (lastNotNull)": "Round",
-              "Value #H (lastNotNull)": "Network Round",
-              "Value #I (lastNotNull)": "Part Key"
+              "Value #D (lastNotNull)": "Peers",
+              "Value #E (lastNotNull)": "Round",
+              "Value #F (lastNotNull)": "Network Round",
+              "Value #G (lastNotNull)": "Part Key"
             }
           }
         }
@@ -639,46 +564,34 @@
           "refId": "C"
         },
         {
-          "expr": "label_replace(beacon_teku_version_total{chain=\"ethereum\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "ethereum_peer_count{chain=\"ethereum\",instance=~\"$instance\"} or besu_peers_connected_total{chain=\"ethereum\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(ethereum_teku_latest_version_info{chain=\"ethereum\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "ethereum_blockchain_height{chain=\"ethereum\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "ethereum_peer_count{chain=\"ethereum\",instance=~\"$instance\"} or besu_peers_connected_total{chain=\"ethereum\",instance=~\"$instance\"}",
+          "expr": "ethereum_network_block_height{chain=\"ethereum\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "ethereum_blockchain_height{chain=\"ethereum\",instance=~\"$instance\"}",
+          "expr": "beacon_current_epoch{chain=\"ethereum\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "ethereum_network_block_height{chain=\"ethereum\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "H"
-        },
-        {
-          "expr": "beacon_current_epoch{chain=\"ethereum\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "I"
-        },
-        {
           "expr": "validator_local_validator_balances{chain=\"ethereum\",instance=~\"$instance\"} / 1e9",
           "format": "table",
           "instant": true,
-          "refId": "J"
+          "refId": "H"
         }
       ],
       "fieldConfig": {
@@ -747,13 +660,6 @@
               { "id": "custom.cellOptions", "value": { "type": "color-text" } },
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
             ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Latest Version" },
-            "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
-            ]
           }
         ]
       },
@@ -773,44 +679,38 @@
               "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #J": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "excludeByName": { "Time": true },
             "indexByName": {
               "instance": 0,
               "Value #A (lastNotNull)": 1,
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
-              "node_version (lastNotNull)": 4,
-              "latest_version (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
               "Value #G (lastNotNull)": 7,
-              "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9,
-              "Value #J (lastNotNull)": 10
+              "Value #H (lastNotNull)": 8
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Besu Synced",
               "Value #C (lastNotNull)": "Beacon Synced",
-              "node_version (lastNotNull)": "Version",
-              "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peers",
-              "Value #G (lastNotNull)": "Block Height",
-              "Value #H (lastNotNull)": "Network Height",
-              "Value #I (lastNotNull)": "Epoch",
-              "Value #J (lastNotNull)": "Balance (ETH)"
+              "Value #D (lastNotNull)": "Peers",
+              "Value #E (lastNotNull)": "Block Height",
+              "Value #F (lastNotNull)": "Network Height",
+              "Value #G (lastNotNull)": "Epoch",
+              "Value #H (lastNotNull)": "Balance (ETH)"
             }
           }
         }
@@ -846,40 +746,28 @@
           "refId": "C"
         },
         {
-          "expr": "label_replace(audius_node_info{chain=\"audius\",instance=~\"$instance\"}, \"node_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "audius_peers_total{chain=\"audius\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "label_replace(audius_latest_version_info{chain=\"audius\",instance=~\"$instance\"}, \"latest_version\", \"$1\", \"version\", \"(.*)\")",
+          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "audius_peers_total{chain=\"audius\",instance=~\"$instance\"}",
+          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"} * 0 + scalar(max(audius_network_height{chain=\"audius\"}))",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "G"
-        },
-        {
-          "expr": "audius_chain_height{chain=\"audius\",instance=~\"$instance\"} * 0 + scalar(max(audius_network_height{chain=\"audius\"}))",
-          "format": "table",
-          "instant": true,
-          "refId": "H"
-        },
-        {
           "expr": "audius_peers_p2p_connected{chain=\"audius\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
-          "refId": "I"
+          "refId": "G"
         }
       ],
       "fieldConfig": {
@@ -931,13 +819,6 @@
               { "id": "custom.cellOptions", "value": { "type": "color-text" } },
               { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }
             ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Latest Version" },
-            "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }
-            ]
           }
         ]
       },
@@ -957,41 +838,35 @@
               "Value #A": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #B": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #C": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "node_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "latest_version": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
         {
           "id": "organize",
           "options": {
-            "excludeByName": { "Time": true, "Value #D (lastNotNull)": true, "Value #E (lastNotNull)": true },
+            "excludeByName": { "Time": true },
             "indexByName": {
               "instance": 0,
               "Value #A (lastNotNull)": 1,
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
-              "node_version (lastNotNull)": 4,
-              "latest_version (lastNotNull)": 5,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
-              "Value #G (lastNotNull)": 7,
-              "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9
+              "Value #G (lastNotNull)": 7
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
               "Value #B (lastNotNull)": "Ready",
               "Value #C (lastNotNull)": "Synced",
-              "node_version (lastNotNull)": "Version",
-              "latest_version (lastNotNull)": "Latest Version",
-              "Value #F (lastNotNull)": "Peers",
-              "Value #G (lastNotNull)": "Chain Height",
-              "Value #H (lastNotNull)": "Network Height",
-              "Value #I (lastNotNull)": "P2P Connected"
+              "Value #D (lastNotNull)": "Peers",
+              "Value #E (lastNotNull)": "Chain Height",
+              "Value #F (lastNotNull)": "Network Height",
+              "Value #G (lastNotNull)": "P2P Connected"
             }
           }
         }
