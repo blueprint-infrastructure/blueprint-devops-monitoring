@@ -108,6 +108,15 @@ def build_adaptive_card(alert_data):
     severity_emoji = SEVERITY_EMOJI.get(severity, "\u2139\ufe0f")
     color = SEVERITY_COLORS.get(severity, "default")
 
+    # Deduplicate alerts by instance (Grafana sends one per expression ref)
+    seen = set()
+    unique_alerts = []
+    for alert in alerts:
+        instance = alert.get("labels", {}).get("instance", "")
+        if instance not in seen:
+            seen.add(instance)
+            unique_alerts.append(alert)
+
     body = []
 
     # Header
@@ -120,10 +129,15 @@ def build_adaptive_card(alert_data):
         "style": "heading",
     })
 
-    # Status + severity banner
+    # Status + severity + count
+    count = len(unique_alerts)
     body.append({
         "type": "TextBlock",
-        "text": f"**Status:** {status.upper()}  |  **Severity:** {severity_emoji} {severity.upper()}",
+        "text": (
+            f"**Status:** {status.upper()}  |  "
+            f"**Severity:** {severity_emoji} {severity.upper()}  |  "
+            f"**Instances:** {count}"
+        ),
         "wrap": True,
         "color": color,
     })
@@ -137,33 +151,48 @@ def build_adaptive_card(alert_data):
         "isSubtle": True,
     })
 
-    # Individual alert details
-    for i, alert in enumerate(alerts):
-        labels = alert.get("labels", {})
-        annotations = alert.get("annotations", {})
+    # Common description + runbook (show once, from first alert)
+    if unique_alerts:
+        first_ann = unique_alerts[0].get("annotations", {})
+        desc = first_ann.get("description", "")
+        runbook = first_ann.get("runbook_url", "")
 
-        if len(alerts) > 1:
+        if desc:
             body.append({
                 "type": "TextBlock",
-                "text": f"**Alert {i + 1}**",
+                "text": f"**Description:** {desc}",
                 "wrap": True,
                 "separator": True,
             })
+        if runbook:
+            body.append({
+                "type": "TextBlock",
+                "text": f"**Runbook:** [{runbook}]({runbook})",
+                "wrap": True,
+            })
 
-        facts = []
-        if labels.get("alertname"):
-            facts.append({"title": "Alert", "value": labels["alertname"]})
-        if labels.get("instance"):
-            facts.append({"title": "Instance", "value": labels["instance"]})
-        if annotations.get("summary"):
-            facts.append({"title": "Summary", "value": annotations["summary"]})
-        if annotations.get("description"):
-            facts.append({"title": "Description", "value": annotations["description"]})
-        if annotations.get("runbook_url"):
-            facts.append({"title": "Runbook", "value": annotations["runbook_url"]})
+    # Compact instance list
+    instance_lines = []
+    for alert in unique_alerts:
+        labels = alert.get("labels", {})
+        instance = labels.get("instance", "unknown")
+        chain = labels.get("chain", "")
+        prefix = f"[{chain}] " if chain else ""
+        instance_lines.append(f"- {prefix}**{instance}**")
 
-        if facts:
-            body.append({"type": "FactSet", "facts": facts})
+    if instance_lines:
+        body.append({
+            "type": "TextBlock",
+            "text": "**Affected instances:**",
+            "wrap": True,
+            "separator": True,
+            "weight": "Bolder",
+        })
+        body.append({
+            "type": "TextBlock",
+            "text": "\n".join(instance_lines),
+            "wrap": True,
+        })
 
     return _wrap_adaptive_card(body)
 
