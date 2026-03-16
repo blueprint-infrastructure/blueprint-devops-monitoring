@@ -164,7 +164,7 @@ for rule_file in "${RULE_FILES[@]}"; do
             
             for ((r=0; r<RULE_COUNT; r++)); do
                 ALERT_NAME=$(yq eval ".groups[$g].rules[$r].alert" "$rule_file")
-                EXPR=$(yq eval ".groups[$g].rules[$r].expr" "$rule_file" | tr -d '\n' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+                EXPR=$(yq eval ".groups[$g].rules[$r].expr" "$rule_file" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
                 FOR_DURATION=$(yq eval ".groups[$g].rules[$r].for // \"5m\"" "$rule_file")
                 SEVERITY=$(yq eval ".groups[$g].rules[$r].labels.severity // \"warning\"" "$rule_file")
                 SUMMARY=$(yq eval ".groups[$g].rules[$r].annotations.summary // \"\"" "$rule_file")
@@ -205,7 +205,7 @@ for rule_file in "${RULE_FILES[@]}"; do
                         "labels": {
                             "severity": $severity
                         },
-                        "condition": "A",
+                        "condition": "B",
                         "data": [
                             {
                                 "refId": "A",
@@ -215,8 +215,44 @@ for rule_file in "${RULE_FILES[@]}"; do
                                 },
                                 "datasourceUid": $datasourceUID,
                                 "model": {
+                                    "datasource": {
+                                        "type": "prometheus",
+                                        "uid": $datasourceUID
+                                    },
                                     "expr": $expr,
+                                    "instant": true,
+                                    "intervalMs": 1000,
+                                    "maxDataPoints": 43200,
                                     "refId": "A"
+                                }
+                            },
+                            {
+                                "refId": "B",
+                                "relativeTimeRange": {
+                                    "from": 0,
+                                    "to": 0
+                                },
+                                "datasourceUid": "__expr__",
+                                "model": {
+                                    "type": "classic_conditions",
+                                    "refId": "B",
+                                    "conditions": [
+                                        {
+                                            "evaluator": {
+                                                "type": "gt",
+                                                "params": [0]
+                                            },
+                                            "operator": {
+                                                "type": "and"
+                                            },
+                                            "query": {
+                                                "params": ["A"]
+                                            },
+                                            "reducer": {
+                                                "type": "last"
+                                            }
+                                        }
+                                    ]
                                 }
                             }
                         ]

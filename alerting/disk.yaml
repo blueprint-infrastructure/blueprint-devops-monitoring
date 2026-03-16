@@ -5,10 +5,8 @@ groups:
       - alert: DiskSpaceLow
         expr: |
           (
-            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"}) * 100
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"}) * 100
           ) < 15
-          and
-          node_filesystem_readonly{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} == 0
         for: 10m
         labels:
           severity: warning
@@ -20,10 +18,8 @@ groups:
       - alert: DiskSpaceCritical
         expr: |
           (
-            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"}) * 100
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"}) * 100
           ) < 5
-          and
-          node_filesystem_readonly{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*"} == 0
         for: 5m
         labels:
           severity: critical
