@@ -39,7 +39,7 @@ groups:
           severity: high
           chain: avalanche
         annotations:
-          summary: "Avalanche C-Chain is {{ $value }} blocks behind on {{ $labels.instance }}"
+          summary: "Avalanche C-Chain is {{ $values.A.Value }} blocks behind on {{ $labels.instance }}"
           description: "Avalanche C-Chain is more than 100 blocks behind the network on {{ $labels.instance }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 
@@ -50,7 +50,7 @@ groups:
           severity: critical
           chain: avalanche
         annotations:
-          summary: "Avalanche C-Chain is {{ $value }} blocks behind on {{ $labels.instance }}"
+          summary: "Avalanche C-Chain is {{ $values.A.Value }} blocks behind on {{ $labels.instance }}"
           description: "Avalanche C-Chain is severely behind (>1000 blocks) on {{ $labels.instance }} - validator performance at risk"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 
@@ -76,7 +76,7 @@ groups:
           severity: high
           chain: avalanche
         annotations:
-          summary: "Avalanche node has only {{ $value }} peers on {{ $labels.instance }}"
+          summary: "Avalanche node has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
           description: "Avalanche node has fewer than 10 peers on {{ $labels.instance }} - network connectivity may be impaired"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 
@@ -102,7 +102,7 @@ groups:
           severity: warning
           chain: avalanche
         annotations:
-          summary: "Avalanche rewarding stake is {{ $value }}% on {{ $labels.instance }}"
+          summary: "Avalanche rewarding stake is {{ $values.A.Value }}% on {{ $labels.instance }}"
           description: "Avalanche validator rewarding stake percentage has dropped below 97% on {{ $labels.instance }} - may affect rewards"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 
@@ -113,7 +113,7 @@ groups:
           severity: critical
           chain: avalanche
         annotations:
-          summary: "Avalanche rewarding stake is critically low at {{ $value }}% on {{ $labels.instance }}"
+          summary: "Avalanche rewarding stake is critically low at {{ $values.A.Value }}% on {{ $labels.instance }}"
           description: "Avalanche validator rewarding stake percentage has dropped below 95% on {{ $labels.instance }} - rewards at risk"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 

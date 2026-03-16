@@ -19,5 +19,5 @@ groups:
           chain: solana
         annotations:
           summary: "Solana validator stake changed significantly on {{ $labels.instance }}"
-          description: "Solana validator activated stake on {{ $labels.instance }} has changed by more than 10% in the last 24 hours. Current: {{ $value }}"
+          description: "Solana validator activated stake on {{ $labels.instance }} has changed by more than 10% in the last 24 hours. Current: {{ $values.A.Value }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-stake-change.md"

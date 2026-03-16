@@ -66,7 +66,7 @@ groups:
           chain: ethereum
           component: execution
         annotations:
-          summary: "Besu is {{ $value }} blocks behind on {{ $labels.instance }}"
+          summary: "Besu is {{ $values.A.Value }} blocks behind on {{ $labels.instance }}"
           description: "Besu execution client is more than 100 blocks behind the network"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
 
@@ -78,7 +78,7 @@ groups:
           chain: ethereum
           component: execution
         annotations:
-          summary: "Besu is {{ $value }} blocks behind on {{ $labels.instance }}"
+          summary: "Besu is {{ $values.A.Value }} blocks behind on {{ $labels.instance }}"
           description: "Besu is significantly behind - validator may miss attestations"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
 
@@ -106,7 +106,7 @@ groups:
           chain: ethereum
           component: consensus
         annotations:
-          summary: "Teku is {{ $value }} slots behind on {{ $labels.instance }}"
+          summary: "Teku is {{ $values.A.Value }} slots behind on {{ $labels.instance }}"
           description: "Teku beacon node is more than 1 epoch behind (32 slots)"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
 
@@ -118,7 +118,7 @@ groups:
           chain: ethereum
           component: consensus
         annotations:
-          summary: "Teku is {{ $value }} slots behind on {{ $labels.instance }}"
+          summary: "Teku is {{ $values.A.Value }} slots behind on {{ $labels.instance }}"
           description: "Teku is more than 1 finality period behind - attestations will be missed"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-sync-issues.md"
 
@@ -134,7 +134,7 @@ groups:
           chain: ethereum
           component: execution
         annotations:
-          summary: "Besu has only {{ $value }} peers on {{ $labels.instance }}"
+          summary: "Besu has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
           description: "Besu has fewer than 5 peers - network connectivity may be impaired"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
 
@@ -158,7 +158,7 @@ groups:
           chain: ethereum
           component: consensus
         annotations:
-          summary: "Teku has only {{ $value }} peers on {{ $labels.instance }}"
+          summary: "Teku has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
           description: "Teku beacon node has fewer than 10 peers"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
 
@@ -187,7 +187,7 @@ groups:
           component: validator
         annotations:
           summary: "Validator missed attestations on {{ $labels.instance }}"
-          description: "Validator failed to publish {{ $value }} attestations in the last 5 minutes"
+          description: "Validator failed to publish {{ $values.A.Value }} attestations in the last 5 minutes"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/validator-performance.md"
 
       - alert: ValidatorMissedBlocks
@@ -199,7 +199,7 @@ groups:
           component: validator
         annotations:
           summary: "Validator missed block proposals on {{ $labels.instance }}"
-          description: "Validator failed to publish {{ $value }} blocks in the last hour"
+          description: "Validator failed to publish {{ $values.A.Value }} blocks in the last hour"
           runbook_url: "https://github.com/your-org/runbooks/blob/main/validator-performance.md"
 
       # =======================================================================

@@ -142,83 +142,84 @@ for file in "${RULE_FILES[@]}"; do
 done
 echo ""
 
-# Process each rule file
+# Process each rule file using the Ruler API (per-group)
+# The Ruler API is used by Grafana's alerting scheduler, unlike the provisioning API
 SUCCESS_COUNT=0
 FAIL_COUNT=0
 
 for rule_file in "${RULE_FILES[@]}"; do
     echo "Processing: $(basename "$rule_file")..."
-    
-    # Parse YAML and convert to Grafana alert rules
-    # Using yq if available, otherwise awk
-    if command -v yq &> /dev/null; then
-        # Get number of groups
-        GROUP_COUNT=$(yq eval '.groups | length' "$rule_file" 2>/dev/null || echo "0")
-        
-        for ((g=0; g<GROUP_COUNT; g++)); do
-            GROUP_NAME=$(yq eval ".groups[$g].name" "$rule_file")
-            INTERVAL=$(yq eval ".groups[$g].interval // \"1m\"" "$rule_file")
-            RULE_COUNT=$(yq eval ".groups[$g].rules | length" "$rule_file" 2>/dev/null || echo "0")
-            
-            echo "  Group: ${GROUP_NAME} (${RULE_COUNT} rules)"
-            
-            for ((r=0; r<RULE_COUNT; r++)); do
-                ALERT_NAME=$(yq eval ".groups[$g].rules[$r].alert" "$rule_file")
-                EXPR=$(yq eval ".groups[$g].rules[$r].expr" "$rule_file" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
-                FOR_DURATION=$(yq eval ".groups[$g].rules[$r].for // \"5m\"" "$rule_file")
-                SEVERITY=$(yq eval ".groups[$g].rules[$r].labels.severity // \"warning\"" "$rule_file")
-                SUMMARY=$(yq eval ".groups[$g].rules[$r].annotations.summary // \"\"" "$rule_file")
-                DESCRIPTION=$(yq eval ".groups[$g].rules[$r].annotations.description // \"\"" "$rule_file")
-                RUNBOOK_URL=$(yq eval ".groups[$g].rules[$r].annotations.runbook_url // \"\"" "$rule_file")
-                
-                # Skip if no alert name
-                if [ "$ALERT_NAME" = "null" ] || [ -z "$ALERT_NAME" ]; then
-                    continue
-                fi
-                
-                echo "    Creating alert: ${ALERT_NAME}..."
-                
-                # Create Grafana alert rule JSON
-                ALERT_RULE=$(jq -n \
-                    --arg title "$ALERT_NAME" \
-                    --arg folderUID "$FOLDER_UID" \
-                    --arg ruleGroup "$GROUP_NAME" \
-                    --arg expr "$EXPR" \
-                    --arg for "$FOR_DURATION" \
-                    --arg severity "$SEVERITY" \
-                    --arg summary "$SUMMARY" \
-                    --arg description "$DESCRIPTION" \
-                    --arg runbook "$RUNBOOK_URL" \
-                    --arg datasourceUID "$DATASOURCE_UID" \
-                    '{
+
+    if ! command -v yq &> /dev/null; then
+        echo -e "${YELLOW}⚠ yq not found, skipping ${rule_file}${NC}"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        continue
+    fi
+
+    GROUP_COUNT=$(yq eval '.groups | length' "$rule_file" 2>/dev/null || echo "0")
+
+    for ((g=0; g<GROUP_COUNT; g++)); do
+        GROUP_NAME=$(yq eval ".groups[$g].name" "$rule_file")
+        INTERVAL=$(yq eval ".groups[$g].interval // \"1m\"" "$rule_file")
+        RULE_COUNT=$(yq eval ".groups[$g].rules | length" "$rule_file" 2>/dev/null || echo "0")
+
+        echo "  Group: ${GROUP_NAME} (${RULE_COUNT} rules)"
+
+        # Build all rules for this group as a JSON array
+        RULES_JSON="[]"
+
+        for ((r=0; r<RULE_COUNT; r++)); do
+            ALERT_NAME=$(yq eval ".groups[$g].rules[$r].alert" "$rule_file")
+            EXPR_RAW=$(yq eval ".groups[$g].rules[$r].expr" "$rule_file" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+
+            # Extract comparison operator and threshold from PromQL expression
+            if [[ "$EXPR_RAW" =~ ^(.+)[[:space:]]+([\<\>!=]+)[[:space:]]+([0-9]+\.?[0-9]*)$ ]]; then
+                EXPR_BASE="${BASH_REMATCH[1]}"
+                EXPR_OP="${BASH_REMATCH[2]}"
+                EXPR_THRESHOLD="${BASH_REMATCH[3]}"
+            else
+                EXPR_BASE="$EXPR_RAW"
+                EXPR_OP=">"
+                EXPR_THRESHOLD="0"
+            fi
+
+            EXPR="$EXPR_BASE"
+            FOR_DURATION=$(yq eval ".groups[$g].rules[$r].for // \"5m\"" "$rule_file")
+            SEVERITY=$(yq eval ".groups[$g].rules[$r].labels.severity // \"warning\"" "$rule_file")
+            SUMMARY=$(yq eval ".groups[$g].rules[$r].annotations.summary // \"\"" "$rule_file")
+            DESCRIPTION=$(yq eval ".groups[$g].rules[$r].annotations.description // \"\"" "$rule_file")
+            RUNBOOK_URL=$(yq eval ".groups[$g].rules[$r].annotations.runbook_url // \"\"" "$rule_file")
+
+            if [ "$ALERT_NAME" = "null" ] || [ -z "$ALERT_NAME" ]; then
+                continue
+            fi
+
+            echo "    ${ALERT_NAME}..."
+
+            # Build a single rule in ruler API format
+            RULE_JSON=$(jq -n \
+                --arg title "$ALERT_NAME" \
+                --arg expr "$EXPR" \
+                --arg for "$FOR_DURATION" \
+                --arg severity "$SEVERITY" \
+                --arg summary "$SUMMARY" \
+                --arg description "$DESCRIPTION" \
+                --arg runbook "$RUNBOOK_URL" \
+                --arg datasourceUID "$DATASOURCE_UID" \
+                --arg mathExpr "\$A ${EXPR_OP} ${EXPR_THRESHOLD}" \
+                '{
+                    "grafana_alert": {
                         "title": $title,
-                        "ruleGroup": $ruleGroup,
-                        "folderUID": $folderUID,
-                        "noDataState": "NoData",
-                        "execErrState": "Error",
-                        "for": $for,
-                        "annotations": {
-                            "summary": $summary,
-                            "description": $description,
-                            "runbook_url": $runbook
-                        },
-                        "labels": {
-                            "severity": $severity
-                        },
                         "condition": "B",
+                        "no_data_state": "NoData",
+                        "exec_err_state": "Error",
                         "data": [
                             {
                                 "refId": "A",
-                                "relativeTimeRange": {
-                                    "from": 600,
-                                    "to": 0
-                                },
+                                "relativeTimeRange": {"from": 600, "to": 0},
                                 "datasourceUid": $datasourceUID,
                                 "model": {
-                                    "datasource": {
-                                        "type": "prometheus",
-                                        "uid": $datasourceUID
-                                    },
+                                    "datasource": {"type": "prometheus", "uid": $datasourceUID},
                                     "expr": $expr,
                                     "instant": true,
                                     "intervalMs": 1000,
@@ -228,99 +229,55 @@ for rule_file in "${RULE_FILES[@]}"; do
                             },
                             {
                                 "refId": "B",
-                                "relativeTimeRange": {
-                                    "from": 0,
-                                    "to": 0
-                                },
+                                "relativeTimeRange": {"from": 0, "to": 0},
                                 "datasourceUid": "__expr__",
                                 "model": {
-                                    "type": "classic_conditions",
-                                    "refId": "B",
-                                    "conditions": [
-                                        {
-                                            "evaluator": {
-                                                "type": "gt",
-                                                "params": [0]
-                                            },
-                                            "operator": {
-                                                "type": "and"
-                                            },
-                                            "query": {
-                                                "params": ["A"]
-                                            },
-                                            "reducer": {
-                                                "type": "last"
-                                            }
-                                        }
-                                    ]
+                                    "type": "math",
+                                    "expression": $mathExpr,
+                                    "refId": "B"
                                 }
                             }
                         ]
-                    }')
-                
-                # Create alert rule via API
-                HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/grafana_alert_response.json \
-                    -X POST \
-                    -H "Content-Type: application/json" \
-                    -H "Authorization: Bearer ${AMG_API_KEY}" \
-                    -d "$ALERT_RULE" \
-                    "${GRAFANA_URL}/api/v1/provisioning/alert-rules" 2>/dev/null || echo "000")
-                
-                # Check if it's a conflict error (can be 409 or 400 with conflict message)
-                IS_CONFLICT="false"
-                if [ "$HTTP_CODE" = "409" ]; then
-                    IS_CONFLICT="true"
-                elif [ "$HTTP_CODE" = "400" ] && [ -f /tmp/grafana_alert_response.json ]; then
-                    if grep -q "conflict" /tmp/grafana_alert_response.json 2>/dev/null; then
-                        IS_CONFLICT="true"
-                    fi
-                fi
-                
-                if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-                    echo -e "      ${GREEN}✓ Created${NC}"
-                    SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-                elif [ "$IS_CONFLICT" = "true" ]; then
-                    # Rule already exists, try to update
-                    # First get the existing rule UID
-                    EXISTING_RULES=$(curl -s \
-                        -H "Authorization: Bearer ${AMG_API_KEY}" \
-                        "${GRAFANA_URL}/api/v1/provisioning/alert-rules" 2>/dev/null || echo "[]")
-                    
-                    EXISTING_UID=$(echo "$EXISTING_RULES" | jq -r ".[] | select(.title == \"$ALERT_NAME\") | .uid" | head -1)
-                    
-                    if [ -n "$EXISTING_UID" ] && [ "$EXISTING_UID" != "null" ]; then
-                        HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/grafana_alert_response.json \
-                            -X PUT \
-                            -H "Content-Type: application/json" \
-                            -H "Authorization: Bearer ${AMG_API_KEY}" \
-                            -d "$ALERT_RULE" \
-                            "${GRAFANA_URL}/api/v1/provisioning/alert-rules/${EXISTING_UID}" 2>/dev/null || echo "000")
-                        
-                        if [ "$HTTP_CODE" = "200" ]; then
-                            echo -e "      ${GREEN}✓ Updated${NC}"
-                            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-                        else
-                            echo -e "      ${RED}✗ Failed to update (HTTP ${HTTP_CODE})${NC}"
-                            FAIL_COUNT=$((FAIL_COUNT + 1))
-                        fi
-                    else
-                        echo -e "      ${YELLOW}⚠ Already exists${NC}"
-                        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-                    fi
-                else
-                    echo -e "      ${RED}✗ Failed (HTTP ${HTTP_CODE})${NC}"
-                    if [ -f /tmp/grafana_alert_response.json ]; then
-                        cat /tmp/grafana_alert_response.json | jq -r '.message // .' 2>/dev/null || cat /tmp/grafana_alert_response.json
-                    fi
-                    FAIL_COUNT=$((FAIL_COUNT + 1))
-                fi
-            done
+                    },
+                    "for": $for,
+                    "labels": {"severity": $severity},
+                    "annotations": {
+                        "summary": $summary,
+                        "description": $description,
+                        "runbook_url": $runbook
+                    }
+                }')
+
+            RULES_JSON=$(echo "$RULES_JSON" | jq --argjson rule "$RULE_JSON" '. + [$rule]')
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
         done
-    else
-        echo -e "${YELLOW}⚠ yq not found, skipping ${rule_file}${NC}"
-        echo "  Install yq: https://github.com/mikefarah/yq"
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-    fi
+
+        # Build the rule group payload for the ruler API
+        GROUP_PAYLOAD=$(jq -n \
+            --arg name "$GROUP_NAME" \
+            --arg interval "$INTERVAL" \
+            --argjson rules "$RULES_JSON" \
+            '{name: $name, interval: $interval, rules: $rules}')
+
+        # Deploy the entire group via ruler API
+        HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/grafana_alert_response.json \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${AMG_API_KEY}" \
+            -d "$GROUP_PAYLOAD" \
+            "${GRAFANA_URL}/api/ruler/grafana/api/v1/rules/${FOLDER_UID}" 2>/dev/null || echo "000")
+
+        if [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+            echo -e "    ${GREEN}✓ Group deployed${NC}"
+        else
+            echo -e "    ${RED}✗ Group failed (HTTP ${HTTP_CODE})${NC}"
+            if [ -f /tmp/grafana_alert_response.json ]; then
+                cat /tmp/grafana_alert_response.json | jq -r '.message // .' 2>/dev/null || cat /tmp/grafana_alert_response.json
+            fi
+            FAIL_COUNT=$((FAIL_COUNT + RULE_COUNT))
+            SUCCESS_COUNT=$((SUCCESS_COUNT - RULE_COUNT))
+        fi
+    done
 done
 
 # Summary

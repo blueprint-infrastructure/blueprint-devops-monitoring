@@ -39,7 +39,7 @@ groups:
           severity: high
           chain: solana
         annotations:
-          summary: "Solana node is {{ $value }} slots behind on {{ $labels.instance }}"
+          summary: "Solana node is {{ $values.A.Value }} slots behind on {{ $labels.instance }}"
           description: "Solana node is more than 100 slots behind the network on {{ $labels.instance }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
 
@@ -50,7 +50,7 @@ groups:
           severity: critical
           chain: solana
         annotations:
-          summary: "Solana node is {{ $value }} slots behind on {{ $labels.instance }}"
+          summary: "Solana node is {{ $values.A.Value }} slots behind on {{ $labels.instance }}"
           description: "Solana node is severely behind (>1000 slots) on {{ $labels.instance }} - validator may become delinquent"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
 
@@ -61,7 +61,7 @@ groups:
           severity: high
           chain: solana
         annotations:
-          summary: "Solana validator vote account is {{ $value }} slots behind on {{ $labels.instance }}"
+          summary: "Solana validator vote account is {{ $values.A.Value }} slots behind on {{ $labels.instance }}"
           description: "Vote account is lagging behind confirmed slot by more than 50 slots on {{ $labels.instance }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
 
@@ -76,7 +76,7 @@ groups:
           severity: high
           chain: solana
         annotations:
-          summary: "Solana node has only {{ $value }} peers on {{ $labels.instance }}"
+          summary: "Solana node has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
           description: "Solana node has fewer than 10 peers on {{ $labels.instance }} - network connectivity may be impaired"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/solana-delinquent.md"
 

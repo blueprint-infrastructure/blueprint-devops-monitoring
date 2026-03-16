@@ -50,7 +50,7 @@ groups:
           severity: high
           chain: algorand
         annotations:
-          summary: "Algorand node is {{ $value }} rounds behind on {{ $labels.instance }}"
+          summary: "Algorand node is {{ $values.A.Value }} rounds behind on {{ $labels.instance }}"
           description: "Algorand node is more than 10 rounds behind the network on {{ $labels.instance }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
 
@@ -61,7 +61,7 @@ groups:
           severity: critical
           chain: algorand
         annotations:
-          summary: "Algorand node is {{ $value }} rounds behind on {{ $labels.instance }}"
+          summary: "Algorand node is {{ $values.A.Value }} rounds behind on {{ $labels.instance }}"
           description: "Algorand node is severely behind (>100 rounds) on {{ $labels.instance }} - participation at risk"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
 
@@ -76,7 +76,7 @@ groups:
           severity: high
           chain: algorand
         annotations:
-          summary: "Algorand node has only {{ $value }} peers on {{ $labels.instance }}"
+          summary: "Algorand node has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
           description: "Algorand node has fewer than 5 peers on {{ $labels.instance }} - network connectivity may be impaired"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
 

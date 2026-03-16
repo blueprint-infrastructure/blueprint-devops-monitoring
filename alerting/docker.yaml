@@ -21,7 +21,7 @@ groups:
           severity: high
         annotations:
           summary: "Docker container {{ $labels.name }} is restarting frequently on {{ $labels.instance }}"
-          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 15 minutes on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} has restarted {{ $values.A.Value }} times in the last 15 minutes on {{ $labels.instance }}"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/docker-unhealthy.md"
 
       - alert: DockerContainerDown

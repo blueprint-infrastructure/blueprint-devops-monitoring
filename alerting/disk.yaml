@@ -12,7 +12,7 @@ groups:
           severity: warning
         annotations:
           summary: "Disk space is low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
-          description: "Disk space is below 15% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 10 minutes"
+          description: "Disk space is below 15% ({{ $values.A.Value }}% available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 10 minutes"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/disk-full.md"
 
       - alert: DiskSpaceCritical
@@ -25,5 +25,5 @@ groups:
           severity: critical
         annotations:
           summary: "Disk space is critically low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
-          description: "Disk space is below 5% ({{ $value | humanizePercentage }} available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 5 minutes"
+          description: "Disk space is below 5% ({{ $values.A.Value }}% available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 5 minutes"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/disk-full.md"
