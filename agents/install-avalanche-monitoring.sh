@@ -107,9 +107,8 @@ if curl -sf "http://localhost:${AVALANCHE_RPC_PORT}/ext/health" >/dev/null 2>&1;
         log_info "${chain}-Chain bootstrapped: ${IS_BOOTSTRAPPED}"
     done
 else
-    log_error "Cannot connect to Avalanche node (localhost:${AVALANCHE_RPC_PORT})"
-    log_info "Make sure AvalancheGo is running and accessible"
-    exit 1
+    log_warn "Cannot connect to Avalanche node (localhost:${AVALANCHE_RPC_PORT})"
+    log_warn "Monitoring will be installed but metrics collection will start once AvalancheGo is running"
 fi
 
 # Check metrics endpoint
