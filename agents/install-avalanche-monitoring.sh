@@ -650,9 +650,6 @@ metrics:
 integrations:
   agent:
     enabled: true
-  docker:
-    enabled: true
-    host: unix:///var/run/docker.sock
 EOF
 
 # Set permissions
