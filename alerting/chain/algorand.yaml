@@ -70,14 +70,14 @@ groups:
       # =======================================================================
 
       - alert: AlgorandLowPeers
-        expr: algorand_network_peers < 5
+        expr: algorand_network_peers < 3
         for: 10m
         labels:
           severity: high
           chain: algorand
         annotations:
           summary: "Algorand node has only {{ $values.A.Value }} peers on {{ $labels.instance }}"
-          description: "Algorand node has fewer than 5 peers on {{ $labels.instance }} - network connectivity may be impaired"
+          description: "Algorand node has fewer than 3 peers on {{ $labels.instance }} - network connectivity may be impaired"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/algorand-participation.md"
 
       # =======================================================================
