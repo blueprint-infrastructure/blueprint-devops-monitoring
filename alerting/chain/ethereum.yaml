@@ -151,7 +151,7 @@ groups:
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
 
       - alert: TekuLowPeers
-        expr: beacon_peer_count < 10
+        expr: libp2p_peers < 10
         for: 10m
         labels:
           severity: warning
@@ -163,7 +163,7 @@ groups:
           runbook_url: "https://github.com/your-org/runbooks/blob/main/ethereum-connectivity.md"
 
       - alert: TekuNoPeers
-        expr: beacon_peer_count == 0
+        expr: libp2p_peers == 0
         for: 5m
         labels:
           severity: critical

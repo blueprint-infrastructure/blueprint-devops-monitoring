@@ -231,7 +231,7 @@ for rule_file in "${RULE_FILES[@]}"; do
                     "grafana_alert": {
                         "title": $title,
                         "condition": "B",
-                        "no_data_state": "NoData",
+                        "no_data_state": "OK",
                         "exec_err_state": "Error",
                         "data": [
                             {
