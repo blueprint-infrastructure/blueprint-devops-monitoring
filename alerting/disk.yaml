@@ -18,7 +18,7 @@ groups:
       - alert: DiskSpaceCritical
         expr: |
           (
-            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain!="audius"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain!="audius"}) * 100
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"}) * 100
           ) < 5
         for: 5m
         labels:
