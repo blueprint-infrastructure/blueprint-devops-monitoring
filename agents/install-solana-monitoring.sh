@@ -412,9 +412,18 @@ EOF
     done
 
     # Get identity pubkey
-    if [[ -n "$identity_keypair" ]] && command -v solana-keygen >/dev/null 2>&1; then
+    # Method 1: RPC getIdentity (works for both Firedancer and Agave)
+    local identity_response
+    identity_response=$(rpc_call "getIdentity")
+    identity=$(echo "$identity_response" | grep -o '"identity":"[^"]*"' | cut -d'"' -f4 || echo "")
+
+    # Method 2: Fallback to solana-keygen if RPC didn't work
+    if [[ -z "$identity" ]] && [[ -n "$identity_keypair" ]] && command -v solana-keygen >/dev/null 2>&1; then
         identity=$(solana-keygen pubkey "$identity_keypair" 2>/dev/null || echo "")
-    elif command -v solana >/dev/null 2>&1; then
+    fi
+
+    # Method 3: Fallback to solana CLI
+    if [[ -z "$identity" ]] && command -v solana >/dev/null 2>&1; then
         identity=$(solana address 2>/dev/null || echo "")
     fi
 
@@ -427,37 +436,26 @@ EOF
     local commission=0
 
     if [[ -n "$identity" ]]; then
+        # Query vote accounts from public RPC (Firedancer local RPC may not support getVoteAccounts)
         local vote_accounts_response
-        vote_accounts_response=$(rpc_call "getVoteAccounts")
+        vote_accounts_response=$(curl -s --max-time 30 -X POST -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getVoteAccounts\",\"params\":[{\"nodePubkey\":\"${identity}\"}]}" \
+            "https://api.mainnet-beta.solana.com" 2>/dev/null || echo '{}')
 
         # Check current validators
         if echo "$vote_accounts_response" | grep -q "\"nodePubkey\":\"${identity}\""; then
             is_validator=1
 
             # Check if in current or delinquent list
-            if echo "$vote_accounts_response" | grep -A20 '"current"' | grep -q "\"nodePubkey\":\"${identity}\""; then
+            if echo "$vote_accounts_response" | grep -q '"current".*"nodePubkey"'; then
                 is_delinquent=0
-            elif echo "$vote_accounts_response" | grep -A20 '"delinquent"' | grep -q "\"nodePubkey\":\"${identity}\""; then
+            fi
+            if echo "$vote_accounts_response" | grep -q '"delinquent".*"nodePubkey"'; then
                 is_delinquent=1
             fi
 
-            # Extract stake using solana validators command (most reliable)
-            # Use public mainnet RPC to query validator info
-            if command -v solana >/dev/null 2>&1; then
-                local validators_output
-                validators_output=$(timeout 30 solana validators --url https://api.mainnet-beta.solana.com 2>/dev/null | grep "${identity}" || echo "")
-                if [[ -n "$validators_output" ]]; then
-                    # Parse stake from validators output (last column before SOL, format: "343825.970070064 SOL")
-                    # Output format: identity vote_account commission skip% credits credits version stake
-                    activated_stake=$(echo "$validators_output" | awk '{for(i=1;i<=NF;i++) if($i=="SOL") print $(i-1)}' | head -1 || echo "0")
-                    # Convert SOL to lamports (1 SOL = 1e9 lamports)
-                    if [[ -n "$activated_stake" ]] && [[ "$activated_stake" != "0" ]]; then
-                        activated_stake=$(echo "$activated_stake * 1000000000" | bc 2>/dev/null || echo "0")
-                        # Remove decimal part if any
-                        activated_stake=${activated_stake%%.*}
-                    fi
-                fi
-            fi
+            # Extract activatedStake from the JSON response
+            activated_stake=$(echo "$vote_accounts_response" | grep -o '"activatedStake":[0-9]*' | head -1 | cut -d':' -f2 || echo "0")
         fi
     fi
 
@@ -767,9 +765,6 @@ metrics:
 integrations:
   agent:
     enabled: true
-  docker:
-    enabled: true
-    host: unix:///var/run/docker.sock
 EOF
 
 # Set permissions
