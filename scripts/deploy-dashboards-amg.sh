@@ -46,14 +46,6 @@ if [ -z "$AMG_WORKSPACE_ID" ]; then
     exit 1
 fi
 
-# Forbid manual AMG_API_KEY (script must create it automatically)
-if [ -n "$AMG_API_KEY" ]; then
-    echo -e "${RED}✗ ERROR: AMG_API_KEY is manually set${NC}"
-    echo -e "${RED}   Manual API keys are forbidden. The script will create temporary API keys automatically.${NC}"
-    echo -e "${RED}   Please remove AMG_API_KEY from your environment (.env file or environment variables).${NC}"
-    exit 1
-fi
-
 # Get AMG endpoint if not provided
 if [ -z "$AMG_ENDPOINT" ]; then
     echo "Fetching AMG workspace endpoint..."
@@ -62,7 +54,7 @@ if [ -z "$AMG_ENDPOINT" ]; then
         --region "${AMG_REGION}" \
         --query 'workspace.endpoint' \
         --output text 2>/dev/null || echo "")
-    
+
     if [ -z "$AMG_ENDPOINT" ]; then
         echo -e "${RED}✗ Failed to get AMG workspace endpoint${NC}"
         echo "Please set AMG_ENDPOINT environment variable manually"
@@ -70,26 +62,48 @@ if [ -z "$AMG_ENDPOINT" ]; then
     fi
 fi
 
-# Get API key if not provided (using IAM role or API key)
-if [ -z "$AMG_API_KEY" ]; then
+# Authenticate via service account token (preferred) or fall back to API key
+AMG_SERVICE_ACCOUNT_ID="${AMG_SERVICE_ACCOUNT_ID:-}"
+AMG_API_KEY="${AMG_API_KEY:-}"
+
+if [ -n "$AMG_API_KEY" ]; then
+    # Use pre-configured API key or service account token directly
+    echo -e "${GREEN}✓ Using provided API key/token${NC}"
+elif [ -n "$AMG_SERVICE_ACCOUNT_ID" ]; then
+    # Create a short-lived token from the service account
+    echo "Creating service account token..."
+    AMG_API_KEY=$(aws grafana create-workspace-service-account-token \
+        --workspace-id "${AMG_WORKSPACE_ID}" \
+        --service-account-id "${AMG_SERVICE_ACCOUNT_ID}" \
+        --name "deploy-dashboards-$(date +%s)" \
+        --seconds-to-live 3600 \
+        --region "${AMG_REGION}" \
+        --query 'serviceAccountToken.key' \
+        --output text 2>/dev/null || echo "")
+
+    if [ -z "$AMG_API_KEY" ]; then
+        echo -e "${RED}✗ Could not create service account token${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Created service account token${NC}"
+else
+    # Fall back to workspace API key (legacy, has quota limits)
     echo "Creating temporary API key for AMG..."
-    # Try to create API key using IAM role
     AMG_API_KEY=$(aws grafana create-workspace-api-key \
         --workspace-id "${AMG_WORKSPACE_ID}" \
-        --key-name "deploy-script-$(date +%s)" \
+        --key-name "deploy-dashboards-$(date +%s)" \
         --key-role "ADMIN" \
         --seconds-to-live 3600 \
         --region "${AMG_REGION}" \
         --query 'key' \
         --output text 2>/dev/null || echo "")
-    
+
     if [ -z "$AMG_API_KEY" ]; then
-        echo -e "${YELLOW}⚠ Could not create API key automatically${NC}"
-        echo "Please set AMG_API_KEY environment variable or configure IAM permissions"
-        echo "You can create an API key in the Grafana UI: Settings -> API Keys"
+        echo -e "${RED}✗ Could not create API key. Consider using a service account instead.${NC}"
+        echo -e "${RED}  Set AMG_SERVICE_ACCOUNT_ID in .env${NC}"
         exit 1
     fi
-    echo -e "${GREEN}✓ Created temporary API key${NC}"
+    echo -e "${YELLOW}⚠ Using legacy API key (limited quota). Consider switching to service accounts.${NC}"
 fi
 
 GRAFANA_URL="https://${AMG_ENDPOINT}"

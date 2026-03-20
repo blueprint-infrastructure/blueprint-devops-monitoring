@@ -4,12 +4,33 @@ groups:
     rules:
       - alert: NodeDown
         expr: up == 0
-        for: 2m
+        for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Node {{ $labels.instance }} is down"
           description: "Node {{ $labels.instance }} has been down for more than 2 minutes. Job: {{ $labels.job }}"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"
+
+      - alert: AgentHeartbeatMissing
+        expr: |
+          (
+            max by (instance, job) (last_over_time(up{job="node_exporter"}[7d]))
+            unless on (instance, job)
+            last_over_time(up{job="node_exporter"}[10m])
+          )
+          or
+          (
+            max by (instance, job) (last_over_time(up{job="prometheus_federation"}[7d]))
+            unless on (instance, job)
+            last_over_time(up{job="prometheus_federation"}[10m])
+          )
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No metrics received from {{ $labels.instance }}"
+          description: "No heartbeat (up metric) has been received from {{ $labels.instance }} ({{ $labels.instance_id }}) for 10 minutes. The Grafana Agent may have stopped or the instance may be unreachable. Alert auto-resolves after 7 days. If this is a planned decommission, silence by running: END=$(date -u -v+7d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+7 days' +%Y-%m-%dT%H:%M:%SZ) && TOKEN=$(aws grafana create-workspace-service-account-token --workspace-id g-69cf066ee8 --service-account-id 6 --name silence-$(date +%s) --seconds-to-live 300 --region us-east-1 --query 'serviceAccountToken.key' --output text) && curl -s -X POST https://g-69cf066ee8.grafana-workspace.us-east-1.amazonaws.com/api/alertmanager/grafana/api/v2/silences -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' -d '{\"matchers\":[{\"name\":\"instance_id\",\"value\":\"{{ $labels.instance_id }}\",\"isRegex\":false,\"isEqual\":true},{\"name\":\"alertname\",\"value\":\"AgentHeartbeatMissing\",\"isRegex\":false,\"isEqual\":true}],\"startsAt\":\"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'\",\"endsAt\":\"'$END'\",\"createdBy\":\"cli\",\"comment\":\"Node {{ $labels.instance }} ({{ $labels.instance_id }}) decommissioned\"}'"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/node-down.md"
 
       - alert: TargetScrapeError

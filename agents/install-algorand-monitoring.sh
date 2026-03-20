@@ -63,6 +63,7 @@ NODE_EXPORTER_VERSION="${NODE_EXPORTER_VERSION:-1.7.0}"
 
 # Optional config
 INSTANCE_NAME="${INSTANCE_NAME:-$(hostname)}"
+EC2_INSTANCE_ID=$(curl -sf --max-time 2 http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || grep -o '"ManagedInstanceID":"[^"]*"' /var/lib/amazon/ssm/registration 2>/dev/null | cut -d'"' -f4 || hostname)
 CHAIN="algorand"
 
 # Validate AMP config
@@ -684,6 +685,7 @@ metrics:
     scrape_interval: 15s
     external_labels:
       instance: '${INSTANCE_NAME}'
+      instance_id: '${EC2_INSTANCE_ID}'
       chain: '${CHAIN}'
       env: 'production'
 

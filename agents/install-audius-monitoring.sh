@@ -74,6 +74,7 @@ if [[ -z "${INSTANCE_NAME:-}" ]]; then
         INSTANCE_NAME="$_raw_hostname"
     fi
 fi
+EC2_INSTANCE_ID=$(curl -sf --max-time 2 http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || grep -o '"ManagedInstanceID":"[^"]*"' /var/lib/amazon/ssm/registration 2>/dev/null | cut -d'"' -f4 || hostname)
 CHAIN="audius"
 
 # Validate AMP config
@@ -751,6 +752,7 @@ metrics:
     scrape_interval: 15s
     external_labels:
       instance: '${INSTANCE_NAME}'
+      instance_id: '${EC2_INSTANCE_ID}'
       chain: '${CHAIN}'
       env: 'production'
 
