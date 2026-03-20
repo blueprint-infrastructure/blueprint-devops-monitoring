@@ -442,21 +442,19 @@ EOF
             -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getVoteAccounts\",\"params\":[{\"nodePubkey\":\"${identity}\"}]}" \
             "https://api.mainnet-beta.solana.com" 2>/dev/null || echo '{}')
 
-        # Check current validators
-        if echo "$vote_accounts_response" | grep -q "\"nodePubkey\":\"${identity}\""; then
-            is_validator=1
-
-            # Check if in current or delinquent list
-            if echo "$vote_accounts_response" | grep -q '"current".*"nodePubkey"'; then
-                is_delinquent=0
-            fi
-            if echo "$vote_accounts_response" | grep -q '"delinquent".*"nodePubkey"'; then
-                is_delinquent=1
-            fi
-
-            # Extract activatedStake from the JSON response
-            activated_stake=$(echo "$vote_accounts_response" | grep -o '"activatedStake":[0-9]*' | head -1 | cut -d':' -f2 || echo "0")
-        fi
+        # Use python3 to extract our validator's info from the JSON response
+        local py_result
+        py_result=$(echo "$vote_accounts_response" | python3 -c '
+import sys, json
+d = json.load(sys.stdin).get("result", {})
+i = sys.argv[1]
+for v in d.get("current", []):
+    if v.get("nodePubkey") == i: print("1 0", v.get("activatedStake", 0)); sys.exit()
+for v in d.get("delinquent", []):
+    if v.get("nodePubkey") == i: print("1 1", v.get("activatedStake", 0)); sys.exit()
+print("0 0 0")
+' "$identity" 2>/dev/null) || py_result="0 0 0"
+        read is_validator is_delinquent activated_stake <<< "$py_result"
     fi
 
     cat >> "$METRICS_FILE_TMP" <<EOF
