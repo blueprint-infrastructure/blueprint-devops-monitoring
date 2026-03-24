@@ -4,7 +4,7 @@ groups:
     rules:
       - alert: HighCPU
         expr: |
-          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle",chain!="audius"}[5m])) * 100) > 85
         for: 10m
         labels:
           severity: warning
@@ -15,7 +15,7 @@ groups:
 
       - alert: HighCPUCritical
         expr: |
-          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle",chain!="audius"}[5m])) * 100) > 95
         for: 5m
         labels:
           severity: high
