@@ -1,20 +1,22 @@
 """
-Lambda function: Grafana Alert -> Teams Adaptive Card + SES Email
+Lambda function: Grafana Alert -> Teams (Power Automate) + SES Email + RCA Trigger
 
 Receives SNS notifications from Amazon Managed Grafana alerts,
-formats them as Microsoft Teams Adaptive Cards, and POSTs to
-a Teams webhook URL. For critical alerts (from the critical SNS topic),
-also sends an HTML email via Amazon SES.
+posts to Microsoft Teams channel via Power Automate webhook (which returns
+a message_id), sends HTML email via SES for critical alerts, and triggers
+the RCA Lambda for automated root cause analysis with reply-in-thread.
 
 Architecture:
-    AMG Alert -> SNS Topic -> This Lambda -> Teams Webhook
+    AMG Alert -> SNS Topic -> This Lambda -> Teams webhook (returns message_id)
                                           -> SES Email (critical only)
+                                          -> RCA Lambda (async, reply-in-thread)
 
 Environment variables:
-    TEAMS_WEBHOOK_URL: Microsoft Teams incoming webhook URL
+    TEAMS_WEBHOOK_URL: Power Automate webhook URL for posting alerts
     ALERT_EMAIL_SENDER: SES verified sender address
     ALERT_EMAIL_RECIPIENTS: Comma-separated recipient addresses
     STAKING_ALERT_CRITICAL_TOPIC_ARN: Critical SNS topic ARN (triggers email)
+    RCA_LAMBDA_FUNCTION_NAME: Name of the RCA analyzer Lambda function
 """
 
 import json
@@ -30,12 +32,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ses_client = boto3.client("ses")
-
-SEVERITY_COLORS = {
-    "critical": "attention",
-    "high": "warning",
-    "warning": "accent",
-}
+lambda_client = boto3.client("lambda")
 
 SEVERITY_EMOJI = {
     "critical": "\U0001f534",  # red circle
@@ -54,10 +51,20 @@ SEVERITY_HTML_COLORS = {
     "warning": "#ffc107",
 }
 
+SEVERITY_COLORS = {
+    "critical": "attention",
+    "high": "warning",
+    "warning": "accent",
+}
+
+
+# =============================================================================
+# Main Handler
+# =============================================================================
 
 def lambda_handler(event, context):
     """Main Lambda handler - processes SNS records and posts to Teams."""
-    webhook_url = os.environ.get("TEAMS_WEBHOOK_URL")
+    webhook_url = os.environ.get("TEAMS_WEBHOOK_URL", "")
     if not webhook_url:
         logger.error("TEAMS_WEBHOOK_URL environment variable not set")
         return {"statusCode": 500, "body": "Missing TEAMS_WEBHOOK_URL"}
@@ -75,22 +82,86 @@ def lambda_handler(event, context):
         except json.JSONDecodeError:
             alert_data = {"message": sns_message}
 
-        # Always send to Teams
-        card = build_adaptive_card(alert_data)
-        post_to_teams(webhook_url, card)
+        # Deduplicate alerts by instance
+        unique_alerts = _deduplicate_alerts(alert_data.get("alerts", []))
+
+        # Send to Teams via webhook, capture message_id from response
+        message_id = None
+        card = build_adaptive_card(alert_data, unique_alerts)
+        try:
+            message_id = post_to_teams(webhook_url, card)
+        except Exception:
+            logger.exception("Teams webhook failed")
 
         # Send email only for critical topic
         if topic_arn == critical_topic_arn:
             send_email(alert_data)
 
+        # Trigger RCA for firing alerts
+        status = alert_data.get("status", "").lower()
+        if status == "firing":
+            trigger_rca(alert_data, unique_alerts, message_id)
+
     return {"statusCode": 200, "body": "OK"}
 
 
+def _deduplicate_alerts(alerts):
+    """Deduplicate alerts by instance (Grafana sends one per expression ref)."""
+    seen = set()
+    unique = []
+    for alert in alerts:
+        instance = alert.get("labels", {}).get("instance", "")
+        if instance not in seen:
+            seen.add(instance)
+            unique.append(alert)
+    return unique
+
+
 # =============================================================================
-# Teams Adaptive Card
+# Teams Webhook (Power Automate)
 # =============================================================================
 
-def build_adaptive_card(alert_data):
+def post_to_teams(webhook_url, card_payload):
+    """POST the Adaptive Card to the Teams webhook.
+
+    The Power Automate flow should be configured to return a JSON response
+    containing the message_id of the posted message. If the response contains
+    a message_id, it is returned for use in reply-in-thread.
+    """
+    data = json.dumps(card_payload).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response_body = response.read().decode("utf-8")
+            logger.info("Teams webhook response: %s %s", response.status, response_body[:200])
+
+            # Try to parse message_id from response
+            # Power Automate flow should return: {"message_id": "..."}
+            try:
+                resp_data = json.loads(response_body)
+                message_id = resp_data.get("message_id")
+                if message_id:
+                    logger.info("Got message_id from webhook: %s", message_id)
+                    return message_id
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+            return None
+    except urllib.error.HTTPError as e:
+        logger.error("Teams webhook HTTP error: %s %s", e.code, e.read().decode("utf-8"))
+        raise
+    except urllib.error.URLError as e:
+        logger.error("Teams webhook URL error: %s", e.reason)
+        raise
+
+
+def build_adaptive_card(alert_data, unique_alerts):
     """Build a Teams Adaptive Card from Grafana alert data."""
     alerts = alert_data.get("alerts", [])
 
@@ -107,15 +178,6 @@ def build_adaptive_card(alert_data):
     status_emoji = STATUS_EMOJI.get(status, "\u2139\ufe0f")
     severity_emoji = SEVERITY_EMOJI.get(severity, "\u2139\ufe0f")
     color = SEVERITY_COLORS.get(severity, "default")
-
-    # Deduplicate alerts by instance (Grafana sends one per expression ref)
-    seen = set()
-    unique_alerts = []
-    for alert in alerts:
-        instance = alert.get("labels", {}).get("instance", "")
-        if instance not in seen:
-            seen.add(instance)
-            unique_alerts.append(alert)
 
     body = []
 
@@ -234,26 +296,49 @@ def _wrap_adaptive_card(body):
     }
 
 
-def post_to_teams(webhook_url, card_payload):
-    """POST the Adaptive Card to the Teams webhook."""
-    data = json.dumps(card_payload).encode("utf-8")
-    req = urllib.request.Request(
-        webhook_url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+# =============================================================================
+# RCA Trigger
+# =============================================================================
 
-    try:
-        with urllib.request.urlopen(req, timeout=10) as response:
-            response_body = response.read().decode("utf-8")
-            logger.info("Teams webhook response: %s %s", response.status, response_body)
-    except urllib.error.HTTPError as e:
-        logger.error("Teams webhook HTTP error: %s %s", e.code, e.read().decode("utf-8"))
-        raise
-    except urllib.error.URLError as e:
-        logger.error("Teams webhook URL error: %s", e.reason)
-        raise
+def trigger_rca(alert_data, unique_alerts, parent_message_id):
+    """Trigger RCA Lambda asynchronously for each alert with instance_id."""
+    rca_function = os.environ.get("RCA_LAMBDA_FUNCTION_NAME", "")
+    if not rca_function:
+        logger.info("RCA_LAMBDA_FUNCTION_NAME not set, skipping RCA trigger")
+        return
+
+    for alert in unique_alerts:
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+        instance_id = labels.get("instance_id", "")
+
+        if not instance_id:
+            logger.info("No instance_id for %s, skipping RCA", labels.get("instance", ""))
+            continue
+
+        rca_payload = {
+            "alertname": labels.get("alertname", ""),
+            "instance": labels.get("instance", ""),
+            "instance_id": instance_id,
+            "chain": labels.get("chain", ""),
+            "severity": labels.get("severity", ""),
+            "status": "firing",
+            "description": annotations.get("description", ""),
+            "summary": annotations.get("summary", ""),
+            "runbook_url": annotations.get("runbook_url", ""),
+            "labels": labels,
+            "parent_message_id": parent_message_id,
+        }
+
+        try:
+            lambda_client.invoke(
+                FunctionName=rca_function,
+                InvocationType="Event",  # async
+                Payload=json.dumps(rca_payload).encode("utf-8"),
+            )
+            logger.info("RCA triggered for %s (%s)", labels.get("instance", ""), instance_id)
+        except Exception:
+            logger.exception("Failed to trigger RCA for %s", labels.get("instance", ""))
 
 
 # =============================================================================
@@ -273,7 +358,6 @@ def send_email(alert_data):
     if not recipients:
         return
 
-    alerts = alert_data.get("alerts", [])
     status = alert_data.get("status", "unknown").upper()
     title = alert_data.get("title",
                 alert_data.get("commonLabels", {}).get("alertname", "Grafana Alert"))

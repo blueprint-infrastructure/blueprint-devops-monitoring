@@ -51,12 +51,21 @@ monitoring/
 │   ├── install-avalanche-monitoring.sh
 │   ├── install-algorand-monitoring.sh
 │   └── install-audius-monitoring.sh
+├── lambda/                  # AWS Lambda functions
+│   ├── teams-notifier/      # Alert notifications (Teams + Email + RCA trigger)
+│   │   └── handler.py
+│   └── rca-analyzer/        # Automated root cause analysis
+│       └── handler.py
+├── docs/                    # Setup guides
+│   └── azure-bot-setup.md   # Azure Bot Service setup for reply-in-thread
 └── scripts/                 # Deployment scripts
     ├── validate.sh          # Local validation script
     ├── deploy.sh            # Master deployment script
     ├── deploy-dashboards-amg.sh    # Deploy dashboards to AMG
     ├── deploy-alerts-amg.sh        # Deploy alert rules to AMG
     ├── deploy-notifications-amg.sh # Deploy contact points and policies
+    ├── deploy-sns-lambda.sh        # Deploy SNS topics + teams-notifier Lambda
+    ├── deploy-rca-lambda.sh        # Deploy RCA analyzer Lambda
     └── env.example          # Environment variable template
 ```
 
@@ -209,6 +218,59 @@ aws s3 cp agents/install-<chain>-monitoring.sh s3://blueprint-infra-devops/agent
 ```
 
 Each script installs three components: node_exporter (system metrics), a chain-specific collector (business metrics), and Grafana Agent (pushes to AMP via SigV4).
+
+## Automated Root Cause Analysis (RCA)
+
+When an alert fires, the system automatically diagnoses the root cause using SSM + AMP metrics + Claude AI.
+
+### How It Works
+
+```
+AMG Alert → SNS → teams-notifier Lambda → Teams Adaptive Card
+                                        → SES Email (critical)
+                                        → rca-analyzer Lambda (async)
+                                              ├→ Claude API: generate diagnostic commands
+                                              ├→ SSM: execute commands on the machine
+                                              ├→ AMP: query historical metric trends
+                                              ├→ Claude API: analyze root cause
+                                              └→ Teams: post RCA card to channel
+```
+
+### RCA Output
+
+Each RCA message includes:
+- **Root Cause** — specific process/service causing the issue, correlated with metric trends
+- **Severity Assessment** — urgency level with reasoning
+- **Remediation Steps** — numbered steps with actual shell commands to fix the issue
+
+### Deployment
+
+```bash
+# Deploy RCA Lambda (includes teams-notifier updates)
+./scripts/deploy-rca-lambda.sh
+
+# Or via the master deploy script
+./scripts/deploy.sh --rca-only
+```
+
+### Environment Variables (RCA)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key |
+| `AMP_WORKSPACE_ID` | Yes | Amazon Managed Prometheus workspace ID |
+| `RCA_LAMBDA_FUNCTION_NAME` | Auto | Set automatically by deploy script |
+| `TEAMS_REPLY_WEBHOOK_URL` | No | Power Automate webhook for reply-in-thread (future) |
+
+### Architecture
+
+- **teams-notifier** (Python 3.12, 128MB, 60s) — Posts alerts to Teams, triggers RCA async
+- **rca-analyzer** (Python 3.12, 256MB, 180s) — Two-phase Claude API pipeline:
+  1. Generates diagnostic commands and PromQL queries based on alert + runbook context
+  2. Executes SSM commands + AMP queries in parallel
+  3. Analyzes results to produce structured root cause + remediation
+- Runbooks are bundled into the Lambda package and used as context for Claude
+- All alerts with an `instance_id` label automatically trigger RCA
 
 ## Conventions
 

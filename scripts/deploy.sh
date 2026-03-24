@@ -39,6 +39,7 @@ DEPLOY_INFRA=true
 DEPLOY_NOTIFICATIONS=true
 DEPLOY_DASHBOARDS=true
 DEPLOY_ALERTS=true
+DEPLOY_RCA=true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -50,24 +51,35 @@ while [[ $# -gt 0 ]]; do
             DEPLOY_NOTIFICATIONS=false
             DEPLOY_DASHBOARDS=false
             DEPLOY_ALERTS=false
+            DEPLOY_RCA=false
             shift
             ;;
         --notifications-only)
             DEPLOY_INFRA=false
             DEPLOY_DASHBOARDS=false
             DEPLOY_ALERTS=false
+            DEPLOY_RCA=false
             shift
             ;;
         --dashboards-only)
             DEPLOY_INFRA=false
             DEPLOY_NOTIFICATIONS=false
             DEPLOY_ALERTS=false
+            DEPLOY_RCA=false
             shift
             ;;
         --alerts-only)
             DEPLOY_INFRA=false
             DEPLOY_NOTIFICATIONS=false
             DEPLOY_DASHBOARDS=false
+            DEPLOY_RCA=false
+            shift
+            ;;
+        --rca-only)
+            DEPLOY_INFRA=false
+            DEPLOY_NOTIFICATIONS=false
+            DEPLOY_DASHBOARDS=false
+            DEPLOY_ALERTS=false
             shift
             ;;
         --help)
@@ -79,6 +91,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --notifications-only Deploy only notification contact points and policies"
             echo "  --dashboards-only    Deploy only dashboards"
             echo "  --alerts-only        Deploy only alert rules"
+            echo "  --rca-only           Deploy only RCA (Root Cause Analysis) Lambda"
             echo "  --help               Show this help message"
             echo ""
             echo "Environment variables:"
@@ -189,6 +202,27 @@ if [ "$DEPLOY_ALERTS" = true ]; then
     else
         echo -e "${RED}✗ Alert rules deployment failed${NC}"
         exit 1
+    fi
+    echo ""
+fi
+
+# Deploy RCA Lambda
+if [ "$DEPLOY_RCA" = true ]; then
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Deploying RCA Lambda${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+
+    if [ -z "${ANTHROPIC_SECRET_ARN:-}" ]; then
+        echo -e "${YELLOW}⚠ ANTHROPIC_SECRET_ARN not set, skipping RCA deployment${NC}"
+        echo "  Set ANTHROPIC_SECRET_ARN in .env to deploy the RCA Lambda"
+    else
+        if "${SCRIPT_DIR}/deploy-rca-lambda.sh"; then
+            echo -e "${GREEN}✓ RCA Lambda deployed successfully${NC}"
+        else
+            echo -e "${RED}✗ RCA Lambda deployment failed${NC}"
+            exit 1
+        fi
     fi
     echo ""
 fi
