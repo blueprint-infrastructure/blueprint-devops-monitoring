@@ -131,6 +131,195 @@ If there's nothing notable, say "No significant operational changes in recent re
 Keep response under 500 words. Be specific — include version numbers, config keys, command names."""
 
 
+# Static operational knowledge per chain (also used by rca-analyzer)
+STATIC_OPS_KNOWLEDGE = {
+    "solana": {
+        "title": "Solana Validator",
+        "clients": "Agave (solana-validator) / Firedancer",
+        "architecture": [
+            "RPC endpoint: localhost:8899 (JSON-RPC)",
+            "Gossip ports: 8000-8020 (UDP+TCP)",
+            "Identity keypair: /home/sol/validator-keypair.json or /home/firedancer/validator-keypair.json",
+            "Service: systemctl status solana-validator OR systemctl status firedancer",
+            "Ledger: /data/solana/ledger (requires NVMe SSD, 256GB+ RAM)",
+        ],
+        "health_checks": [
+            ("Node health", "curl -s http://localhost:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}'"),
+            ("Sync status", "solana catchup --our-localhost"),
+            ("Current slot", "solana slot"),
+            ("Validator status", "solana validators --url localhost | grep $(solana address)"),
+            ("Vote account", "solana vote-account <VOTE_PUBKEY> --url localhost"),
+            ("Peer count", "solana gossip --url localhost | wc -l"),
+            ("Version", "solana --version"),
+            ("Service logs", "journalctl -u solana-validator --since '30 min ago' --no-pager | tail -50"),
+        ],
+        "alert_thresholds": [
+            "slots_behind > 100 ≈ 40s lag → HIGH",
+            "slots_behind > 1000 = severely behind, validator likely delinquent → CRITICAL",
+            "vote_slots_behind > 50 = vote account lagging → HIGH",
+            "peers == 0 = isolated → CRITICAL",
+            "peers < 10 = degraded → HIGH",
+        ],
+        "common_issues": [
+            ("Validator delinquent", "Not voting. Run `solana catchup --our-localhost`. If >1000 slots behind, restart with fresh snapshot. Check disk I/O (`iostat -x 1 3`) and memory (`free -h`)."),
+            ("Slots behind >100", "Usually I/O bottleneck. Solana requires NVMe SSD with high IOPS. Check `iostat` for high await times. Also check network connectivity."),
+            ("Low/no peers", "Check firewall: ports 8000-8020 (UDP+TCP) must be open. Verify gossip entrypoints are reachable."),
+            ("Version drift", "Must stay on cluster-majority version. Check `solana feature status`. Upgrade: `solana-install update`"),
+            ("High memory usage", "Normal — Solana validators use 256GB+ RAM. Only investigate if OOM kills occur (`dmesg | grep -i oom`)."),
+            ("Snapshot restart", "solana-validator exit --force && restart service. May need to download fresh snapshot if severely behind."),
+        ],
+        "version_upgrade": "solana-install update (Agave) / Follow Firedancer release notes for fdctl upgrade",
+        "restart_procedure": "systemctl restart solana-validator (graceful). For stuck nodes: solana-validator exit --force",
+    },
+    "ethereum": {
+        "title": "Ethereum Validator (Besu + Teku)",
+        "clients": "Besu (execution layer) + Teku (consensus + validator)",
+        "architecture": [
+            "Besu: port 8545 (JSON-RPC), 9545 (metrics), 30303 (P2P)",
+            "Teku: port 5051 (REST API), 5054 (metrics), 9000 (P2P)",
+            "Validator client: integrated in Teku",
+            "Services: systemctl status besu, systemctl status teku",
+            "Data: Besu chaindata ~1TB+, Teku beacon ~200GB",
+        ],
+        "health_checks": [
+            ("Besu sync", "curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_syncing\"}'"),
+            ("Besu block number", "curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_blockNumber\"}'"),
+            ("Besu peers", "curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"net_peerCount\"}'"),
+            ("Teku sync", "curl -s localhost:5051/eth/v1/node/syncing"),
+            ("Teku health", "curl -s localhost:5051/eth/v1/node/health"),
+            ("Teku peers", "curl -s localhost:5051/eth/v1/node/peer_count"),
+            ("Besu logs", "journalctl -u besu --since '30 min ago' --no-pager | tail -50"),
+            ("Teku logs", "journalctl -u teku --since '30 min ago' --no-pager | tail -50"),
+        ],
+        "alert_thresholds": [
+            "Slot time = 12s, epoch = 32 slots = 6.4 minutes",
+            "1 epoch behind (32 slots) → HIGH",
+            "Finality delay > 225 slots (~45 min) → CRITICAL (possible network issue)",
+            "Besu peers < 5 → degraded execution layer",
+            "Teku peers < 10 → degraded consensus layer",
+        ],
+        "common_issues": [
+            ("Besu/Teku down", "Check journalctl for OOM kills, disk full, Java heap issues. Besu needs 8GB+ heap, Teku 4GB+. Check `dmesg | grep -i oom`."),
+            ("Not synced", "MUST check BOTH layers. Besu can be synced but Teku not, or vice versa. Both must be synced for validator duties."),
+            ("Missed attestations", "Teku can't reach Besu (check localhost:8545), or Teku beacon not synced to chain head."),
+            ("Missed block proposals", "Check clock sync (`timedatectl`), NTP drift, system load, Teku<->Besu latency."),
+            ("Peer issues", "Besu and Teku have SEPARATE P2P networks. Check both independently. Verify ports 30303 (Besu) and 9000 (Teku) are open."),
+        ],
+        "version_upgrade": "Stop teku → stop besu → upgrade binaries → start besu → wait for sync → start teku",
+        "restart_procedure": "systemctl restart besu && sleep 30 && systemctl restart teku (always restart Besu first, wait for it to be ready)",
+    },
+    "avalanche": {
+        "title": "Avalanche Validator",
+        "clients": "AvalancheGo",
+        "architecture": [
+            "Single Go binary managing 3 chains: P-Chain, X-Chain, C-Chain",
+            "RPC: localhost:9650 (HTTP API for all chains)",
+            "Staking port: 9651",
+            "Service: systemctl status avalanchego",
+            "Config: /etc/avalanchego/ or ~/.avalanchego/",
+            "C-Chain DB can grow to 500GB+",
+        ],
+        "health_checks": [
+            ("Node health", "curl -s -X POST http://localhost:9650/ext/health -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"health.health\"}'"),
+            ("C-Chain bootstrap", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"C\"}}'"),
+            ("P-Chain bootstrap", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"P\"}}'"),
+            ("X-Chain bootstrap", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}'"),
+            ("Peer count", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.peers\"}' | python3 -c \"import json,sys; print(len(json.load(sys.stdin)['result']['peers']))\""),
+            ("Uptime", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.uptime\"}'"),
+            ("Node ID", "curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.getNodeID\"}'"),
+            ("Logs", "journalctl -u avalanchego --since '30 min ago' --no-pager | tail -50"),
+        ],
+        "alert_thresholds": [
+            "Rewarding stake < 97% → WARNING",
+            "Rewarding stake < 95% → CRITICAL",
+            "80% uptime = FORFEIT ALL staking rewards (binary, not proportional!)",
+            "C-chain 100 blocks behind → HIGH",
+            "C-chain 1000 blocks behind → CRITICAL",
+            "Peers < 10 → degraded, 0 → isolated",
+        ],
+        "common_issues": [
+            ("Not bootstrapped", "ALL 3 chains (P/X/C) must bootstrap. C-Chain is largest and slowest. Check disk space and memory. If stuck, check logs for 'failed to fetch' or 'context deadline exceeded'."),
+            ("Rewarding stake low", "CRITICAL: Avalanche uses BINARY rewards — below 80% uptime forfeits ALL rewards, not proportional. Check `info.uptime`. Compare local vs network-observed uptime. Recent restarts or connectivity issues reduce uptime."),
+            ("C-Chain blocks behind", "Usually disk I/O (C-Chain is EVM, write-heavy). Check `iostat`. Also check peer count."),
+            ("Version drift", "Network enforces minimum version. Old versions get disconnected. Upgrade promptly after releases."),
+        ],
+        "version_upgrade": "systemctl stop avalanchego → download new binary → systemctl start avalanchego",
+        "restart_procedure": "systemctl restart avalanchego (node will re-bootstrap, may take minutes to hours depending on chain state)",
+    },
+    "algorand": {
+        "title": "Algorand Participation Node",
+        "clients": "algod + goal CLI",
+        "architecture": [
+            "Data directory: /var/lib/algorand",
+            "API: localhost:8080 (node REST API)",
+            "P2P gossip: ports 4160, 4161",
+            "Service: systemctl status algorand",
+            "Block time: ~3.3 seconds per round",
+        ],
+        "health_checks": [
+            ("Node status", "goal node status -d /var/lib/algorand"),
+            ("Health", "curl -s http://localhost:8080/health"),
+            ("Ready (synced)", "curl -s http://localhost:8080/ready"),
+            ("Participation keys", "goal account listpartkeys -d /var/lib/algorand"),
+            ("Key details", "goal account partkeyinfo -d /var/lib/algorand"),
+            ("Version", "algod -v"),
+            ("Logs", "tail -50 /var/lib/algorand/node.log"),
+        ],
+        "alert_thresholds": [
+            "10 rounds behind ≈ 33 seconds → HIGH",
+            "100 rounds behind ≈ 5.5 minutes → CRITICAL",
+            "Participation key < 600k rounds remaining (~23 days) → WARNING",
+            "Participation key < 300k rounds remaining (~11 days) → CRITICAL (renew immediately)",
+            "Peers < 3 → connectivity issue",
+        ],
+        "common_issues": [
+            ("Rounds behind / not synced", "Check `goal node status` for sync progress. If severely behind, use fast-catchup: `goal node catchup $(curl -s https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/mainnet/latest.catchpoint) -d /var/lib/algorand`"),
+            ("Participation key expiring", "Keys expire SILENTLY. Days remaining = (LAST_VALID - CURRENT_ROUND) × 3.3 / 86400. Must regenerate BEFORE expiry. Run `goal account partkeyinfo -d /var/lib/algorand` to check."),
+            ("Node not ready after restart", "Normal catchup behavior. Check `goal node status` for sync time. Fast-catchup available via catchpoint."),
+            ("Low peers", "Check firewall for ports 4160/4161. Check DNS relay configuration."),
+        ],
+        "version_upgrade": "systemctl stop algorand → update algod binary → systemctl start algorand. Use `goal node status` to verify sync after restart.",
+        "restart_procedure": "systemctl restart algorand. Node will catch up automatically.",
+    },
+    "audius": {
+        "title": "Audius Creator Node",
+        "clients": "go-openaudio (Docker container 'my-node')",
+        "architecture": [
+            "Docker container: 'my-node' (Audius creator node)",
+            "Health: https://<hostname>/health-check (external), http://localhost:4000/health_check (internal)",
+            "Watchtower: auto-updates my-node container",
+            "All nodes run on Proxmox LXC containers sharing host resources",
+            "CPU at ~100% is NORMAL — CometBFT consensus + IPFS is CPU-intensive",
+        ],
+        "health_checks": [
+            ("Container status", "docker ps -a --format 'table {{.Names}}\\t{{.Status}}\\t{{.State}}' | grep -E 'my-node|watchtower'"),
+            ("Container health", "docker inspect --format='{{json .State.Health}}' my-node 2>/dev/null | python3 -m json.tool"),
+            ("Container uptime", "docker inspect --format='{{.State.StartedAt}}' my-node"),
+            ("Recent logs", "docker logs --tail 100 my-node 2>&1 | tail -50"),
+            ("Watchtower logs", "docker logs --tail 20 watchtower"),
+            ("Resource usage", "docker stats --no-stream"),
+            ("OOM check", "dmesg | grep -i 'oom\\|killed' | tail -10"),
+            ("Disk usage", "docker system df"),
+        ],
+        "alert_thresholds": [
+            "CPU ~95-100% = NORMAL (do NOT alert)",
+            "chain_height = 0 after restart = NORMAL (wait 5-10 min)",
+            "ETH balance < 0.1 ETH → WARNING",
+            "ETH balance < 0.04 ETH → CRITICAL (claims may fail)",
+        ],
+        "common_issues": [
+            ("Container restarting", "Check Watchtower logs first — version update causes expected restart. Check `dmesg` for OOM kills. DO NOT assume high CPU is the cause."),
+            ("Not ready / syncing / chain_height=0", "Node initializing after restart. Expected to take 5-10 minutes. Check `docker logs my-node` for sync progress."),
+            ("Health check failing", "Check `docker logs my-node` for error stack traces. Common: CometBFT consensus issues, database corruption."),
+            ("ETH balance low", "Fund the claims address via standard ETH transfer."),
+            ("High CPU", "NORMAL AND EXPECTED. Do NOT restart, reduce CPU, or investigate unless other symptoms exist."),
+        ],
+        "version_upgrade": "Watchtower handles automatic updates. For manual: docker pull <image> && docker restart my-node",
+        "restart_procedure": "docker restart my-node. Wait 5-10 minutes for sync.",
+    },
+}
+
+
 # =============================================================================
 # Main Handler
 # =============================================================================
@@ -359,7 +548,7 @@ def _get_notion_token():
 
 
 def update_notion_page(chain, knowledge, releases_text):
-    """Update the Notion page for a chain with latest knowledge."""
+    """Update the Notion page for a chain with a complete ops manual."""
     token = _get_notion_token()
     if not token:
         logger.warning("No Notion token, skipping Notion update")
@@ -370,45 +559,92 @@ def update_notion_page(chain, knowledge, releases_text):
         logger.warning("No Notion page ID for chain: %s", chain)
         return
 
+    ops = STATIC_OPS_KNOWLEDGE.get(chain)
+    if not ops:
+        logger.warning("No static ops knowledge for chain: %s", chain)
+        return
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     # Clear existing content blocks
     _notion_clear_blocks(token, page_id)
 
-    # Build new content blocks
     blocks = []
 
-    # Last updated timestamp
-    blocks.append(_notion_callout(f"Last updated: {now}", "🕐"))
+    # Header
+    blocks.append(_notion_callout(
+        f"{ops['title']} — Operations Manual\nClients: {ops['clients']}\nLast updated: {now}",
+        "📋"
+    ))
 
-    # Operational Updates
-    blocks.append(_notion_heading("Operational Updates"))
-    for line in (knowledge or "No updates available.").split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith("BREAKING") or line.startswith("KNOWN") or line.startswith("NEW") or line.startswith("RECOMMENDED"):
-            blocks.append(_notion_heading(line.rstrip(":"), level=3))
-        elif line.startswith("- "):
-            blocks.append(_notion_bullet(line[2:]))
-        else:
-            blocks.append(_notion_paragraph(line))
+    # === Architecture ===
+    blocks.append(_notion_heading("Architecture"))
+    for item in ops["architecture"]:
+        blocks.append(_notion_bullet(item))
 
     blocks.append(_notion_divider())
 
-    # Latest Releases
-    blocks.append(_notion_heading("Latest Releases"))
+    # === Health Checks ===
+    blocks.append(_notion_heading("Health Checks"))
+    health_code = "\n".join([f"# {label}\n{cmd}\n" for label, cmd in ops["health_checks"]])
+    blocks.append(_notion_code(health_code))
+
+    blocks.append(_notion_divider())
+
+    # === Alert Thresholds ===
+    blocks.append(_notion_heading("Alert Thresholds"))
+    for item in ops["alert_thresholds"]:
+        blocks.append(_notion_bullet(item))
+
+    blocks.append(_notion_divider())
+
+    # === Common Issues & Troubleshooting ===
+    blocks.append(_notion_heading("Common Issues & Troubleshooting"))
+    for issue, resolution in ops["common_issues"]:
+        blocks.append(_notion_heading(f"🔧 {issue}", level=3))
+        blocks.append(_notion_paragraph(resolution))
+
+    blocks.append(_notion_divider())
+
+    # === Operations ===
+    blocks.append(_notion_heading("Operations"))
+    blocks.append(_notion_heading("Version Upgrade", level=3))
+    blocks.append(_notion_paragraph(ops["version_upgrade"]))
+    blocks.append(_notion_heading("Restart Procedure", level=3))
+    blocks.append(_notion_paragraph(ops["restart_procedure"]))
+
+    blocks.append(_notion_divider())
+
+    # === Latest Updates (from docs-fetcher) ===
+    blocks.append(_notion_heading("Latest Updates (Auto-fetched)"))
+    if knowledge:
+        for line in knowledge.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.endswith(":") and line.isupper():
+                blocks.append(_notion_heading(line.rstrip(":"), level=3))
+            elif line.startswith("- "):
+                blocks.append(_notion_bullet(line[2:]))
+            elif line.startswith("##"):
+                blocks.append(_notion_heading(line.lstrip("# ").strip(), level=3))
+            else:
+                blocks.append(_notion_paragraph(line))
+    else:
+        blocks.append(_notion_paragraph("No updates available."))
+
+    blocks.append(_notion_divider())
+
+    # === Release Notes Summary ===
+    blocks.append(_notion_heading("Recent Release Notes"))
     if releases_text:
+        # Summarize: just show release headers
         for line in releases_text[:3000].split("\n"):
             line = line.strip()
             if not line:
                 continue
             if line.startswith("Release:"):
-                blocks.append(_notion_heading(line, level=3))
-            elif line.startswith("- ") or line.startswith("* "):
-                blocks.append(_notion_bullet(line[2:]))
-            else:
-                blocks.append(_notion_paragraph(line[:2000]))
+                blocks.append(_notion_bullet(line))
     else:
         blocks.append(_notion_paragraph("No release data available."))
 
@@ -481,6 +717,13 @@ def _notion_paragraph(text):
 def _notion_bullet(text):
     return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
         "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_code(text, language="shell"):
+    return {"object": "block", "type": "code", "code": {
+        "rich_text": [{"text": {"content": text[:2000]}}],
+        "language": language,
     }}
 
 
