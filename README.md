@@ -52,12 +52,14 @@ monitoring/
 │   ├── install-algorand-monitoring.sh
 │   └── install-audius-monitoring.sh
 ├── lambda/                  # AWS Lambda functions
-│   ├── teams-notifier/      # Alert notifications (Teams + Email + RCA trigger)
+│   ├── teams-notifier/      # Alert notifications (Bot Framework + Email)
 │   │   └── handler.py
-│   └── rca-analyzer/        # Automated root cause analysis
+│   ├── rca-analyzer/        # Automated root cause analysis
+│   │   └── handler.py
+│   ├── bot-endpoint/        # Bot messaging endpoint (handles button clicks)
+│   │   └── handler.py
+│   └── docs-fetcher/        # Chain knowledge fetcher (GitHub + docs → S3 + Notion)
 │       └── handler.py
-├── docs/                    # Setup guides
-│   └── azure-bot-setup.md   # Azure Bot Service setup for reply-in-thread
 └── scripts/                 # Deployment scripts
     ├── validate.sh          # Local validation script
     ├── deploy.sh            # Master deployment script
@@ -221,27 +223,74 @@ Each script installs three components: node_exporter (system metrics), a chain-s
 
 ## Automated Root Cause Analysis (RCA)
 
-When an alert fires, the system automatically diagnoses the root cause using SSM + AMP metrics + Claude AI.
+On-demand root cause analysis triggered via card buttons in Teams. Uses SSM + AMP metrics + Claude AI with chain-specific knowledge.
 
 ### How It Works
 
 ```
-AMG Alert → SNS → teams-notifier Lambda → Teams Adaptive Card
-                                        → SES Email (critical)
-                                        → rca-analyzer Lambda (async)
-                                              ├→ Claude API: generate diagnostic commands
-                                              ├→ SSM: execute commands on the machine
-                                              ├→ AMP: query historical metric trends
-                                              ├→ Claude API: analyze root cause
-                                              └→ Teams: post RCA card to channel
+AMG Alert → SNS → teams-notifier Lambda → Bot Framework API → Teams Adaptive Card
+                                                                (with "🔍 Analyze" buttons per instance)
+                                        → SES Email (critical only)
+
+User clicks button → Teams → bot-endpoint Lambda (API Gateway)
+                               → rca-analyzer Lambda (async)
+                                     ├→ Claude API: generate diagnostic commands (chain-aware)
+                                     ├→ SSM: execute commands on the machine
+                                     ├→ AMP: query historical metric trends
+                                     ├→ Claude API: analyze root cause
+                                     └→ Bot Framework: reply-in-thread with diagnosis
 ```
 
 ### RCA Output
 
-Each RCA message includes:
-- **Root Cause** — specific process/service causing the issue, correlated with metric trends
+Each RCA reply (in the alert message's thread) includes:
+- **Root Cause** — specific process/service causing the issue, with chain-specific context
 - **Severity Assessment** — urgency level with reasoning
 - **Remediation Steps** — numbered steps with actual shell commands to fix the issue
+
+### Chain-Specific Knowledge
+
+RCA prompts include per-chain architecture, diagnostic commands, failure modes, and thresholds for:
+- **Solana** — Agave/Firedancer, slots behind, delinquency, vote account
+- **Ethereum** — Besu (execution) + Teku (consensus), dual-layer sync, attestations
+- **Avalanche** — AvalancheGo, P/X/C-Chain bootstrap, rewarding stake (80% threshold)
+- **Algorand** — algod, participation key expiry, round sync
+- **Audius** — Docker-based (my-node), watchtower auto-updates, CPU 100% is normal
+
+Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetcher` Lambda, stored in S3 and [Notion](https://www.notion.so/32f09a37-0ee0-8154-9efd-cb49c3acd4dc).
+
+#### Data Sources
+
+**GitHub Releases** (latest 3 releases per repo):
+
+| Chain | Repos |
+|---|---|
+| Solana | `anza-xyz/agave`, `firedancer-io/firedancer` |
+| Ethereum | `hyperledger/besu`, `Consensys/teku` |
+| Avalanche | `ava-labs/avalanchego` |
+| Algorand | `algorand/go-algorand` |
+| Audius | `AudiusProject/audius-protocol`, `OpenAudio/go-openaudio` |
+
+**Official Documentation**:
+
+| Chain | URLs |
+|---|---|
+| Solana | `docs.solanalabs.com/operations/best-practices/general`, `docs.solanalabs.com/operations/guides/validator-start` |
+| Ethereum | `besu.hyperledger.org/stable/public-networks/how-to/troubleshoot/performance`, `docs.teku.consensys.io/how-to/troubleshoot/general` |
+| Avalanche | `docs.avax.network/nodes/maintain/node-backup-and-restore`, `docs.avax.network/nodes/maintain/upgrade-your-avalanchego-node` |
+| Algorand | `developer.algorand.org/docs/run-a-node/operations/switch_networks/` |
+| Audius | — |
+
+**Static Knowledge** (built into `rca-analyzer/handler.py`):
+
+Each chain has a hardcoded `CHAIN_KNOWLEDGE` entry covering architecture (clients, ports, services), diagnostic commands, common failure modes, and key thresholds. This serves as a baseline when dynamic data is unavailable.
+
+### Azure Bot Service
+
+Alert cards and RCA replies are posted via Azure Bot Framework API, enabling:
+- **Adaptive Cards** with Action.Submit buttons for on-demand RCA
+- **Reply-in-thread** — RCA results appear in the alert message's thread
+- **Bot endpoint** — Lambda Function URL behind API Gateway at `https://lambda-api-gateway.theblueprint.xyz/staking_alert_bot/`
 
 ### Deployment
 
@@ -259,18 +308,17 @@ Each RCA message includes:
 |----------|----------|-------------|
 | `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key |
 | `AMP_WORKSPACE_ID` | Yes | Amazon Managed Prometheus workspace ID |
+| `TEAMS_BOT_SECRET_ARN` | Yes | Secrets Manager ARN for Azure Bot credentials |
 | `RCA_LAMBDA_FUNCTION_NAME` | Auto | Set automatically by deploy script |
-| `TEAMS_REPLY_WEBHOOK_URL` | No | Power Automate webhook for reply-in-thread (future) |
 
-### Architecture
+### Lambda Architecture
 
-- **teams-notifier** (Python 3.12, 128MB, 60s) — Posts alerts to Teams, triggers RCA async
-- **rca-analyzer** (Python 3.12, 256MB, 180s) — Two-phase Claude API pipeline:
-  1. Generates diagnostic commands and PromQL queries based on alert + runbook context
-  2. Executes SSM commands + AMP queries in parallel
-  3. Analyzes results to produce structured root cause + remediation
-- Runbooks are bundled into the Lambda package and used as context for Claude
-- All alerts with an `instance_id` label automatically trigger RCA
+| Lambda | Memory | Timeout | Purpose |
+|--------|--------|---------|---------|
+| **teams-notifier** | 128MB | 60s | Posts alert cards via Bot Framework, sends email |
+| **bot-endpoint** | 128MB | 30s | Handles Action.Submit button clicks from Teams |
+| **rca-analyzer** | 256MB | 180s | SSM diagnostics + Claude analysis + thread reply |
+| **docs-fetcher** | 256MB | 300s | Fetches chain docs → S3 + Notion (weekly) |
 
 ## Conventions
 
