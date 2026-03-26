@@ -1,18 +1,19 @@
 """
-Lambda function: Grafana Alert -> Teams (Power Automate) + SES Email + RCA Trigger
+Lambda function: Grafana Alert -> Teams (Bot Framework) + SES Email + RCA Trigger
 
 Receives SNS notifications from Amazon Managed Grafana alerts,
-posts to Microsoft Teams channel via Power Automate webhook (which returns
-a message_id), sends HTML email via SES for critical alerts, and triggers
-the RCA Lambda for automated root cause analysis with reply-in-thread.
+posts to Microsoft Teams channel via Azure Bot Framework API (returns
+a message_id for reply-in-thread), sends HTML email via SES for critical
+alerts, and triggers the RCA Lambda for automated root cause analysis.
 
 Architecture:
-    AMG Alert -> SNS Topic -> This Lambda -> Teams webhook (returns message_id)
+    AMG Alert -> SNS Topic -> This Lambda -> Bot Framework API (returns message_id)
                                           -> SES Email (critical only)
                                           -> RCA Lambda (async, reply-in-thread)
 
 Environment variables:
-    TEAMS_WEBHOOK_URL: Power Automate webhook URL for posting alerts
+    TEAMS_BOT_SECRET_ARN: Secrets Manager ARN for Bot Framework credentials
+    TEAMS_WEBHOOK_URL: (fallback) Power Automate webhook URL
     ALERT_EMAIL_SENDER: SES verified sender address
     ALERT_EMAIL_RECIPIENTS: Comma-separated recipient addresses
     STAKING_ALERT_CRITICAL_TOPIC_ARN: Critical SNS topic ARN (triggers email)
@@ -23,6 +24,7 @@ import json
 import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -33,6 +35,16 @@ logger.setLevel(logging.INFO)
 
 ses_client = boto3.client("ses")
 lambda_client = boto3.client("lambda")
+ssm_client = boto3.client("ssm")
+secrets_client = boto3.client("secretsmanager")
+
+# Cache: instance name -> SSM instance ID (populated on first use)
+_instance_id_cache = {}
+
+# Cache: Bot Framework credentials + token
+_bot_config = None
+_bot_token = None
+_bot_token_expires = 0
 
 SEVERITY_EMOJI = {
     "critical": "\U0001f534",  # red circle
@@ -64,11 +76,6 @@ SEVERITY_COLORS = {
 
 def lambda_handler(event, context):
     """Main Lambda handler - processes SNS records and posts to Teams."""
-    webhook_url = os.environ.get("TEAMS_WEBHOOK_URL", "")
-    if not webhook_url:
-        logger.error("TEAMS_WEBHOOK_URL environment variable not set")
-        return {"statusCode": 500, "body": "Missing TEAMS_WEBHOOK_URL"}
-
     critical_topic_arn = os.environ.get("STAKING_ALERT_CRITICAL_TOPIC_ARN", "")
 
     for record in event.get("Records", []):
@@ -85,22 +92,27 @@ def lambda_handler(event, context):
         # Deduplicate alerts by instance
         unique_alerts = _deduplicate_alerts(alert_data.get("alerts", []))
 
-        # Send to Teams via webhook, capture message_id from response
+        # Send to Teams via Bot Framework API (returns message_id)
         message_id = None
-        card = build_adaptive_card(alert_data, unique_alerts)
+        card_content = build_adaptive_card_content(alert_data, unique_alerts)
         try:
-            message_id = post_to_teams(webhook_url, card)
+            message_id = post_via_bot(card_content)
+            logger.info("Posted via Bot Framework, message_id=%s", message_id)
         except Exception:
-            logger.exception("Teams webhook failed")
+            logger.exception("Bot Framework post failed, trying webhook fallback")
+            # Fallback to Power Automate webhook
+            webhook_url = os.environ.get("TEAMS_WEBHOOK_URL", "")
+            if webhook_url:
+                try:
+                    post_to_teams_webhook(webhook_url, _wrap_adaptive_card(card_content))
+                except Exception:
+                    logger.exception("Webhook fallback also failed")
 
         # Send email only for critical topic
         if topic_arn == critical_topic_arn:
             send_email(alert_data)
 
-        # Trigger RCA for firing alerts
-        status = alert_data.get("status", "").lower()
-        if status == "firing":
-            trigger_rca(alert_data, unique_alerts, message_id)
+        # RCA is triggered on-demand via card buttons, not automatically
 
     return {"statusCode": 200, "body": "OK"}
 
@@ -118,56 +130,124 @@ def _deduplicate_alerts(alerts):
 
 
 # =============================================================================
-# Teams Webhook (Power Automate)
+# Bot Framework API
 # =============================================================================
 
-def post_to_teams(webhook_url, card_payload):
-    """POST the Adaptive Card to the Teams webhook.
+def _get_bot_config():
+    """Get Bot Framework credentials from Secrets Manager (cached)."""
+    global _bot_config
+    if _bot_config is not None:
+        return _bot_config
 
-    The Power Automate flow should be configured to return a JSON response
-    containing the message_id of the posted message. If the response contains
-    a message_id, it is returned for use in reply-in-thread.
-    """
-    data = json.dumps(card_payload).encode("utf-8")
+    secret_arn = os.environ.get("TEAMS_BOT_SECRET_ARN", "")
+    if not secret_arn:
+        return None
+
+    try:
+        resp = secrets_client.get_secret_value(SecretId=secret_arn)
+        _bot_config = json.loads(resp["SecretString"])
+        logger.info("Bot config loaded: app_id=%s", _bot_config.get("bot_app_id", "")[:8])
+        return _bot_config
+    except Exception:
+        logger.exception("Failed to load bot config")
+        return None
+
+
+def _get_bot_token():
+    """Get Bot Framework OAuth token (cached until expiry)."""
+    import time
+    global _bot_token, _bot_token_expires
+
+    if _bot_token and time.time() < _bot_token_expires - 60:
+        return _bot_token
+
+    config = _get_bot_config()
+    if not config:
+        return None
+
+    token_url = f"https://login.microsoftonline.com/{config['tenant_id']}/oauth2/v2.0/token"
+    token_data = urllib.parse.urlencode({
+        "client_id": config["bot_app_id"],
+        "client_secret": config["bot_app_password"],
+        "scope": "https://api.botframework.com/.default",
+        "grant_type": "client_credentials",
+    }).encode()
+
+    req = urllib.request.Request(token_url, data=token_data, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        token_resp = json.loads(resp.read())
+        _bot_token = token_resp["access_token"]
+        _bot_token_expires = time.time() + token_resp.get("expires_in", 3600)
+        logger.info("Bot token obtained, expires_in=%s", token_resp.get("expires_in"))
+        return _bot_token
+
+
+def post_via_bot(card_content):
+    """Post an Adaptive Card to Teams via Bot Framework API. Returns message_id."""
+    config = _get_bot_config()
+    if not config:
+        raise RuntimeError("Bot config not available")
+
+    token = _get_bot_token()
+    if not token:
+        raise RuntimeError("Bot token not available")
+
+    channel_id = config["channel_id"]
+    service_url = config.get("service_url", "https://smba.trafficmanager.net/teams/")
+
+    url = f"{service_url}v3/conversations/{channel_id}/activities"
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": card_content,
+        }],
+    }
+
+    data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        webhook_url,
-        data=data,
-        headers={"Content-Type": "application/json"},
+        url, data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         method="POST",
     )
 
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            response_body = response.read().decode("utf-8")
-            logger.info("Teams webhook response: %s %s", response.status, response_body[:200])
-
-            # Try to parse message_id from response
-            # Power Automate flow should return: {"message_id": "..."}
-            try:
-                resp_data = json.loads(response_body)
-                message_id = resp_data.get("message_id")
-                if message_id:
-                    logger.info("Got message_id from webhook: %s", message_id)
-                    return message_id
-            except (json.JSONDecodeError, AttributeError):
-                pass
-
-            return None
-    except urllib.error.HTTPError as e:
-        logger.error("Teams webhook HTTP error: %s %s", e.code, e.read().decode("utf-8"))
-        raise
-    except urllib.error.URLError as e:
-        logger.error("Teams webhook URL error: %s", e.reason)
-        raise
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        result = json.loads(resp.read())
+        message_id = result.get("id")
+        logger.info("Bot message sent: id=%s", message_id)
+        return message_id
 
 
-def build_adaptive_card(alert_data, unique_alerts):
-    """Build a Teams Adaptive Card from Grafana alert data."""
+# =============================================================================
+# Teams Webhook (Fallback)
+# =============================================================================
+
+def post_to_teams_webhook(webhook_url, card_payload):
+    """POST Adaptive Card to Teams via Power Automate webhook (fallback)."""
+    data = json.dumps(card_payload).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as response:
+        logger.info("Webhook fallback response: %s", response.status)
+
+
+def build_adaptive_card_content(alert_data, unique_alerts):
+    """Build Adaptive Card content (body only) from Grafana alert data.
+
+    Returns the card content dict (schema + body), NOT the webhook wrapper.
+    Used by both Bot Framework and webhook (with different wrappers).
+    """
     alerts = alert_data.get("alerts", [])
 
     # Plain text message (not Grafana structured)
     if not alerts and "message" in alert_data:
-        return _build_simple_card(str(alert_data["message"]))
+        return _build_simple_card_content(str(alert_data["message"]))
 
     status = alert_data.get("status", "unknown").lower()
     title = alert_data.get("title",
@@ -213,11 +293,18 @@ def build_adaptive_card(alert_data, unique_alerts):
         "isSubtle": True,
     })
 
-    # Common description + runbook (show once, from first alert)
+    # Common description (show once, from first alert)
     if unique_alerts:
         first_ann = unique_alerts[0].get("annotations", {})
         desc = first_ann.get("description", "")
-        runbook = first_ann.get("runbook_url", "")
+
+        # Strip "silence by running" instructions from description
+        if desc:
+            for marker in ["Alert auto-resolves", "If this is a planned", "silence by running"]:
+                idx = desc.find(marker)
+                if idx > 0:
+                    desc = desc[:idx].rstrip(". ")
+                    break
 
         if desc:
             body.append({
@@ -226,23 +313,9 @@ def build_adaptive_card(alert_data, unique_alerts):
                 "wrap": True,
                 "separator": True,
             })
-        if runbook:
-            body.append({
-                "type": "TextBlock",
-                "text": f"**Runbook:** [{runbook}]({runbook})",
-                "wrap": True,
-            })
 
-    # Compact instance list
-    instance_lines = []
-    for alert in unique_alerts:
-        labels = alert.get("labels", {})
-        instance = labels.get("instance", "unknown")
-        chain = labels.get("chain", "")
-        prefix = f"[{chain}] " if chain else ""
-        instance_lines.append(f"- {prefix}**{instance}**")
-
-    if instance_lines:
+    # Affected instances with RCA buttons
+    if unique_alerts:
         body.append({
             "type": "TextBlock",
             "text": "**Affected instances:**",
@@ -250,17 +323,68 @@ def build_adaptive_card(alert_data, unique_alerts):
             "separator": True,
             "weight": "Bolder",
         })
-        body.append({
-            "type": "TextBlock",
-            "text": "\n".join(instance_lines),
-            "wrap": True,
-        })
 
-    return _wrap_adaptive_card(body)
+        for alert in unique_alerts:
+            labels = alert.get("labels", {})
+            annotations = alert.get("annotations", {})
+            instance = labels.get("instance", "unknown")
+            instance_id = labels.get("instance_id", "")
+            chain = labels.get("chain", "")
+
+            # Resolve instance_id if not in labels
+            if not instance_id:
+                instance_id = _resolve_instance_id(instance)
+
+            chain_prefix = f"[{chain}] " if chain else ""
+            body.append({
+                "type": "TextBlock",
+                "text": f"- {chain_prefix}**{instance}**",
+                "wrap": True,
+            })
+
+        # Add RCA action buttons (only for firing alerts)
+        if alert_data.get("status", "").lower() == "firing":
+            actions = []
+            for alert in unique_alerts:
+                labels = alert.get("labels", {})
+                annotations = alert.get("annotations", {})
+                instance = labels.get("instance", "unknown")
+                instance_id = labels.get("instance_id", "")
+                chain = labels.get("chain", "")
+
+                if not instance_id:
+                    instance_id = _resolve_instance_id(instance)
+
+                if not instance_id:
+                    continue
+
+                actions.append({
+                    "type": "Action.Submit",
+                    "title": f"\U0001f50d Analyze {instance}",
+                    "data": {
+                        "action_type": "trigger_rca",
+                        "alertname": labels.get("alertname", title),
+                        "instance": instance,
+                        "instance_id": instance_id,
+                        "chain": chain,
+                        "severity": labels.get("severity", severity),
+                        "description": annotations.get("description", ""),
+                        "summary": annotations.get("summary", ""),
+                        "runbook_url": annotations.get("runbook_url", ""),
+                        "labels": labels,
+                    },
+                })
+
+            if actions:
+                card = _make_card_content(body)
+                card["actions"] = actions
+                return card
+
+    return _make_card_content(body)
 
 
-def _build_simple_card(message):
-    """Build a simple card for non-structured messages."""
+def _build_simple_card_content(message):
+    """Build a simple card content for non-structured messages."""
     body = [
         {
             "type": "TextBlock",
@@ -274,23 +398,28 @@ def _build_simple_card(message):
             "wrap": True,
         },
     ]
-    return _wrap_adaptive_card(body)
+    return _make_card_content(body)
 
 
-def _wrap_adaptive_card(body):
-    """Wrap body elements in a Power Automate Workflows Adaptive Card envelope."""
+def _make_card_content(body):
+    """Build Adaptive Card content dict (used by Bot Framework directly)."""
+    return {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body,
+    }
+
+
+def _wrap_adaptive_card(card_content):
+    """Wrap card content in Power Automate webhook envelope (fallback only)."""
     return {
         "type": "message",
         "attachments": [
             {
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "contentUrl": None,
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": body,
-                },
+                "content": card_content,
             }
         ],
     }
@@ -299,6 +428,44 @@ def _wrap_adaptive_card(body):
 # =============================================================================
 # RCA Trigger
 # =============================================================================
+
+def _resolve_instance_id(instance_name):
+    """Resolve an instance name to SSM instance ID.
+
+    Checks the alert labels first, then falls back to querying SSM
+    describe-instance-information to match by ComputerName or Name tag.
+    Results are cached for the Lambda lifetime.
+    """
+    global _instance_id_cache
+
+    if instance_name in _instance_id_cache:
+        return _instance_id_cache[instance_name]
+
+    # Build cache on first call
+    if not _instance_id_cache:
+        try:
+            paginator = ssm_client.get_paginator("describe_instance_information")
+            for page in paginator.paginate():
+                for inst in page.get("InstanceInformationList", []):
+                    inst_id = inst.get("InstanceId", "")
+                    computer = inst.get("ComputerName", "")
+                    name = inst.get("Name", "")
+                    # Map by ComputerName (hostname)
+                    if computer:
+                        _instance_id_cache[computer] = inst_id
+                        # Also map short name (e.g., "creator-5.theblueprint.xyz" -> "creator-5")
+                        short = computer.split(".")[0]
+                        if short != computer:
+                            _instance_id_cache[short] = inst_id
+                    # Map by Name tag (activation name)
+                    if name:
+                        _instance_id_cache[name] = inst_id
+            logger.info("SSM instance cache built: %d entries", len(_instance_id_cache))
+        except Exception:
+            logger.exception("Failed to build SSM instance cache")
+
+    return _instance_id_cache.get(instance_name, "")
+
 
 def trigger_rca(alert_data, unique_alerts, parent_message_id):
     """Trigger RCA Lambda asynchronously for each alert with instance_id."""
@@ -310,10 +477,17 @@ def trigger_rca(alert_data, unique_alerts, parent_message_id):
     for alert in unique_alerts:
         labels = alert.get("labels", {})
         annotations = alert.get("annotations", {})
+        instance_name = labels.get("instance", "")
         instance_id = labels.get("instance_id", "")
 
+        # If instance_id not in labels, resolve from SSM
+        if not instance_id and instance_name:
+            instance_id = _resolve_instance_id(instance_name)
+            if instance_id:
+                logger.info("Resolved instance_id for %s: %s", instance_name, instance_id)
+
         if not instance_id:
-            logger.info("No instance_id for %s, skipping RCA", labels.get("instance", ""))
+            logger.info("No instance_id for %s, skipping RCA", instance_name)
             continue
 
         rca_payload = {

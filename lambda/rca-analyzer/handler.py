@@ -154,21 +154,26 @@ def lambda_handler(event, context):
 
     logger.info("Phase 4: Posting RCA to Teams...")
 
-    # Try reply-in-thread first (if parent_message_id and reply webhook configured)
+    # Build the RCA Adaptive Card
+    card_content = build_rca_card_content(alertname, instance, chain, analysis)
+
+    # Try reply-in-thread first via Bot Framework
     posted = False
-    if parent_message_id and os.environ.get("TEAMS_REPLY_WEBHOOK_URL"):
+    if parent_message_id and os.environ.get("TEAMS_BOT_SECRET_ARN"):
         try:
-            reply_html = build_rca_reply_html(alertname, instance, chain, analysis)
-            reply_to_message(parent_message_id, reply_html)
+            reply_in_thread(parent_message_id, card_content)
             logger.info("RCA reply posted to thread %s", parent_message_id)
             posted = True
         except Exception:
             logger.exception("Failed to reply in thread, falling back to new message")
 
-    # Fallback: post as independent Adaptive Card via existing webhook
+    # Fallback: post as new message via Bot Framework
     if not posted:
         try:
-            post_channel_message(alertname, instance, chain, analysis)
+            if os.environ.get("TEAMS_BOT_SECRET_ARN"):
+                post_channel_message_via_bot(card_content)
+            else:
+                post_channel_message(alertname, instance, chain, analysis)
             logger.info("RCA posted as new message")
         except Exception:
             logger.exception("Failed to post RCA message")
@@ -619,35 +624,136 @@ def _call_claude(api_key, system_prompt, user_message):
 
 
 # =============================================================================
-# Phase 4: Teams Reply via Power Automate Webhook
+# Phase 4: Teams Reply via Bot Framework API
 # =============================================================================
 
-def reply_to_message(parent_message_id, html_content):
-    """Reply to a Teams message via Power Automate reply webhook.
+# Bot Framework credentials cache
+_bot_config = None
+_bot_token = None
+_bot_token_expires = 0
 
-    The Power Automate flow receives {message_id, content} and uses
-    the "Reply with a message in a channel" Teams action.
+
+def _get_bot_config():
+    """Get Bot Framework credentials from Secrets Manager (cached)."""
+    global _bot_config
+    if _bot_config is not None:
+        return _bot_config
+
+    secret_arn = os.environ.get("TEAMS_BOT_SECRET_ARN", "")
+    if not secret_arn:
+        return None
+
+    try:
+        resp = secrets_client.get_secret_value(SecretId=secret_arn)
+        _bot_config = json.loads(resp["SecretString"])
+        return _bot_config
+    except Exception:
+        logger.exception("Failed to load bot config")
+        return None
+
+
+def _get_bot_token():
+    """Get Bot Framework OAuth token (cached until expiry)."""
+    global _bot_token, _bot_token_expires
+
+    if _bot_token and time.time() < _bot_token_expires - 60:
+        return _bot_token
+
+    config = _get_bot_config()
+    if not config:
+        return None
+
+    token_url = f"https://login.microsoftonline.com/{config['tenant_id']}/oauth2/v2.0/token"
+    token_data = urllib.parse.urlencode({
+        "client_id": config["bot_app_id"],
+        "client_secret": config["bot_app_password"],
+        "scope": "https://api.botframework.com/.default",
+        "grant_type": "client_credentials",
+    }).encode()
+
+    req = urllib.request.Request(token_url, data=token_data, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        token_resp = json.loads(resp.read())
+        _bot_token = token_resp["access_token"]
+        _bot_token_expires = time.time() + token_resp.get("expires_in", 3600)
+        return _bot_token
+
+
+def reply_in_thread(parent_message_id, card_content):
+    """Reply in a Teams thread via Bot Framework API.
+
+    Uses {channel_id};messageid={parent_id} as the conversation URL
+    to create a proper thread reply.
     """
-    webhook_url = os.environ.get("TEAMS_REPLY_WEBHOOK_URL", "")
-    if not webhook_url:
-        raise RuntimeError("TEAMS_REPLY_WEBHOOK_URL not configured")
+    config = _get_bot_config()
+    if not config:
+        raise RuntimeError("Bot config not available")
+
+    token = _get_bot_token()
+    if not token:
+        raise RuntimeError("Bot token not available")
+
+    channel_id = config["channel_id"]
+    service_url = config.get("service_url", "https://smba.trafficmanager.net/teams/")
+
+    # Thread reply: use channel_id;messageid=<parent> as conversation
+    thread_conv_id = f"{channel_id};messageid={parent_message_id}"
+    url = f"{service_url}v3/conversations/{thread_conv_id}/activities"
 
     payload = {
-        "message_id": parent_message_id,
-        "content": html_content,
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": card_content,
+        }],
     }
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        webhook_url,
-        data=data,
-        headers={"Content-Type": "application/json"},
+        url, data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=15) as response:
-        response_body = response.read().decode("utf-8")
-        logger.info("Reply webhook response: %s %s", response.status, response_body[:200])
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        result = json.loads(resp.read())
+        logger.info("Bot thread reply sent: id=%s", result.get("id"))
+
+
+def post_channel_message_via_bot(card_content):
+    """Post a new message to channel via Bot Framework (fallback when no parent_message_id)."""
+    config = _get_bot_config()
+    if not config:
+        raise RuntimeError("Bot config not available")
+
+    token = _get_bot_token()
+    channel_id = config["channel_id"]
+    service_url = config.get("service_url", "https://smba.trafficmanager.net/teams/")
+
+    url = f"{service_url}v3/conversations/{channel_id}/activities"
+    payload = {
+        "type": "message",
+        "attachments": [{
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": card_content,
+        }],
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        logger.info("Bot new message sent: %s", resp.status)
 
 
 SEVERITY_CARD_COLORS = {
@@ -809,8 +915,25 @@ def _build_plaintext_card(alertname, instance, chain, timestamp, analysis):
     ]
 
 
+def build_rca_card_content(alertname, instance, chain, analysis):
+    """Build RCA Adaptive Card content for Bot Framework API."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    if isinstance(analysis, dict):
+        body = _build_structured_card(alertname, instance, chain, now, analysis)
+    else:
+        body = _build_plaintext_card(alertname, instance, chain, now, analysis)
+
+    return {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body,
+    }
+
+
 def post_channel_message(alertname, instance, chain, analysis):
-    """Post RCA as a new Adaptive Card message to Teams via webhook."""
+    """Post RCA as a new Adaptive Card message to Teams via webhook (legacy fallback)."""
     webhook_url = os.environ.get("TEAMS_WEBHOOK_URL", "")
     if not webhook_url:
         raise RuntimeError("TEAMS_WEBHOOK_URL not configured")

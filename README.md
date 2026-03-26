@@ -85,8 +85,8 @@ monitoring/
 |-------|-----------|----------|------|
 | NodeDown | Target unreachable for 2m | critical | node-health.yaml |
 | TargetScrapeError | Up but no samples for 5m | warning | node-health.yaml |
-| HighCPU | >85% for 10m (excludes audius) | warning | cpu-memory.yaml |
-| HighCPUCritical | >95% for 5m (excludes audius) | high | cpu-memory.yaml |
+| HighCPU | >85% for 10m | warning | cpu-memory.yaml |
+| HighCPUCritical | >95% for 5m | high | cpu-memory.yaml |
 | MemoryPressure | <15% available for 10m | warning | cpu-memory.yaml |
 | MemoryPressureCritical | <5% available for 5m | high | cpu-memory.yaml |
 | NetworkUtilizationHigh | >95% interface saturation for 5m | high | cpu-memory.yaml |

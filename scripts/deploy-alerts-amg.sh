@@ -232,7 +232,7 @@ for rule_file in "${RULE_FILES[@]}"; do
                         "title": $title,
                         "condition": "B",
                         "no_data_state": "OK",
-                        "exec_err_state": "Error",
+                        "exec_err_state": "OK",
                         "data": [
                             {
                                 "refId": "A",
