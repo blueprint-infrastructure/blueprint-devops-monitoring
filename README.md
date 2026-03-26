@@ -269,7 +269,7 @@ Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetc
 | Ethereum | `hyperledger/besu`, `Consensys/teku` |
 | Avalanche | `ava-labs/avalanchego` |
 | Algorand | `algorand/go-algorand` |
-| Audius | `AudiusProject/audius-protocol` |
+| Audius | `AudiusProject/audius-protocol`, `OpenAudio/go-openaudio` |
 
 **Official Documentation**:
 

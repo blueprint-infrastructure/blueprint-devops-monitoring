@@ -96,6 +96,7 @@ CHAIN_SOURCES = {
     "audius": {
         "github_repos": [
             "AudiusProject/audius-protocol",
+            "OpenAudio/go-openaudio",
         ],
         "docs_urls": [],
     },
