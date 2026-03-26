@@ -60,6 +60,205 @@ FALLBACK_SSM_COMMANDS = [
     "dmesg | tail -20 2>/dev/null || true",
 ]
 
+# =============================================================================
+# Chain-Specific Knowledge Base
+# =============================================================================
+
+CHAIN_KNOWLEDGE = {
+    "solana": """SOLANA VALIDATOR ARCHITECTURE:
+- Client: Agave (solana-validator) or Firedancer
+- RPC: localhost:8899
+- Gossip ports: 8000-8020 (UDP+TCP)
+- Key metrics: solana_node_healthy, solana_node_slots_behind, solana_validator_delinquent, solana_network_peers
+- Service: systemctl status solana-validator OR systemctl status firedancer
+- Identity keypair: /home/sol/validator-keypair.json or /home/firedancer/validator-keypair.json
+
+DIAGNOSTIC COMMANDS:
+- Health: curl -s http://localhost:8899 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+- Sync: solana catchup --our-localhost
+- Current slot: solana slot
+- Validator status: solana validators --url localhost | grep $(solana address)
+- Vote account: solana vote-account <VOTE_PUBKEY> --url localhost
+- Gossip peers: solana gossip --url localhost | wc -l
+- Version: solana --version
+- Logs: journalctl -u solana-validator --since "30 min ago" --no-pager | tail -50
+
+COMMON FAILURE MODES:
+- Delinquent: Validator not voting. Check sync status first (solana catchup). If >1000 slots behind, likely needs fresh snapshot restart. Check disk I/O (iostat) and memory (free -h). Solana requires NVMe SSD and 256GB+ RAM.
+- Slots behind >100: Usually I/O bottleneck. Check iostat -x 1 3 for high await times. Solana writes ~100MB/s to ledger. Network issues also cause this.
+- Low/no peers: Firewall blocking ports 8000-8020 (UDP+TCP). Check ss -tulnp | grep -E "8000|8001". Also check if gossip entrypoints are reachable.
+- Version drift: Must stay on cluster-majority version. Check solana feature status. Upgrade with solana-install update.
+
+KEY THRESHOLDS:
+- 100 slots behind ≈ 40 seconds lag (high severity)
+- 1000 slots behind = severely behind, validator likely delinquent (critical)
+- 50 vote slots behind = vote account lagging behind confirmed slots (high)
+- 0 peers = completely isolated, immediate action needed (critical)
+- <10 peers = degraded connectivity (high)""",
+
+    "ethereum": """ETHEREUM VALIDATOR ARCHITECTURE (Besu + Teku):
+- Execution layer: Besu (port 8545 JSON-RPC, port 9545 metrics, port 30303 P2P)
+- Consensus layer: Teku beacon node (port 5051 REST API, port 5054 metrics, port 9000 P2P)
+- Validator client: Integrated in Teku
+- Services: systemctl status besu, systemctl status teku
+- Data: Besu chaindata can be 1TB+, Teku beacon data ~200GB
+
+DIAGNOSTIC COMMANDS:
+- Besu sync status: curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_syncing"}'
+- Besu block number: curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber"}'
+- Besu peer count: curl -s localhost:8545 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"net_peerCount"}'
+- Teku sync: curl -s localhost:5051/eth/v1/node/syncing
+- Teku health: curl -s localhost:5051/eth/v1/node/health
+- Teku peers: curl -s localhost:5051/eth/v1/node/peer_count
+- Besu logs: journalctl -u besu --since "30 min ago" --no-pager | tail -50
+- Teku logs: journalctl -u teku --since "30 min ago" --no-pager | tail -50
+
+COMMON FAILURE MODES:
+- BesuDown/TekuDown: Service crashed. Check journalctl for OOM kills (dmesg | grep -i oom), disk full, or Java heap issues. Besu needs 8GB+ heap, Teku needs 4GB+.
+- NotSynced: MUST check BOTH layers. Besu can be synced but Teku not, or vice versa. Both must be synced for validator to work.
+- Missed attestations: Teku can't reach Besu (check localhost:8545 connectivity), or Teku beacon not synced to head.
+- Missed block proposals: Clock skew (check timedatectl, NTP), high system load, or Teku<->Besu latency.
+- Peer issues: Besu and Teku have separate P2P networks. Check both independently.
+
+KEY THRESHOLDS:
+- Ethereum slot time = 12 seconds, epoch = 32 slots = 6.4 minutes
+- 1 epoch behind (32 slots) = high severity
+- Finality delay > 225 slots (~45 minutes) = potential network-wide issue (critical)
+- Besu peers < 5 = poor execution layer connectivity
+- Teku peers < 10 = poor consensus layer connectivity""",
+
+    "avalanche": """AVALANCHE VALIDATOR ARCHITECTURE:
+- Client: AvalancheGo (single Go binary, manages 3 chains)
+- RPC: localhost:9650 (HTTP API for all chains)
+- Staking port: 9651
+- Chains: P-Chain (platform/staking), X-Chain (exchange/transfers), C-Chain (contract/EVM)
+- Service: systemctl status avalanchego
+- Config: typically in /etc/avalanchego/ or ~/.avalanchego/
+
+DIAGNOSTIC COMMANDS:
+- Health: curl -s -X POST http://localhost:9650/ext/health -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"health.health"}'
+- C-Chain bootstrap: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.isBootstrapped","params":{"chain":"C"}}'
+- P-Chain bootstrap: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.isBootstrapped","params":{"chain":"P"}}'
+- X-Chain bootstrap: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.isBootstrapped","params":{"chain":"X"}}'
+- Peers: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.peers"}' | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'Peers: {len(d.get(\"result\",{}).get(\"peers\",[]))}')"
+- Uptime: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.uptime"}'
+- Node ID: curl -s -X POST http://localhost:9650/ext/info -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"info.getNodeID"}'
+- Logs: journalctl -u avalanchego --since "30 min ago" --no-pager | tail -50
+
+COMMON FAILURE MODES:
+- Not bootstrapped: ALL 3 chains (P/X/C) must complete bootstrapping. C-Chain is largest and takes longest. Check disk space (C-Chain DB can be 500GB+) and memory. If stuck, check logs for "failed to fetch" or "context deadline exceeded".
+- Rewarding stake low (<97%): THIS IS CRITICAL. Avalanche uses a binary reward system: if validator uptime drops below 80% during a staking period, ALL rewards are forfeited (not proportional). The network measures uptime, not the local node. Check info.uptime and compare with network view.
+- C-Chain blocks behind: Usually disk I/O (C-Chain is EVM, write-heavy) or peer connectivity. Check iostat and peer count.
+- Version drift: Network enforces minimum version. Old versions get disconnected. Check info.getNodeVersion.
+
+KEY THRESHOLDS:
+- Rewarding stake < 97% = WARNING (trending toward reward loss)
+- Rewarding stake < 95% = CRITICAL (imminent risk of losing ALL rewards)
+- 80% uptime = FORFEIT ALL staking rewards for entire validation period (not proportional!)
+- C-chain 100 blocks behind = high, 1000 = critical
+- Peers < 10 = degraded, 0 = isolated""",
+
+    "algorand": """ALGORAND VALIDATOR (PARTICIPATION NODE) ARCHITECTURE:
+- Client: algod daemon + goal CLI tool
+- Data directory: /var/lib/algorand
+- API: localhost:8080 (node REST API)
+- P2P gossip: ports 4160, 4161
+- Service: systemctl status algorand
+- Block time: ~3.3 seconds per round
+
+DIAGNOSTIC COMMANDS:
+- Node status: goal node status -d /var/lib/algorand
+- Health: curl -s http://localhost:8080/health
+- Ready (synced): curl -s http://localhost:8080/ready
+- Participation keys: goal account listpartkeys -d /var/lib/algorand
+- Key details: goal account partkeyinfo -d /var/lib/algorand
+- Version: algod -v
+- Logs: tail -50 /var/lib/algorand/node.log
+
+COMMON FAILURE MODES:
+- Not synced/rounds behind: Check if node is in "Sync Time" catchup mode (goal node status shows "Sync Time: X"). 10 rounds = ~33 seconds behind. If severely behind, consider fast-catchup: goal node catchup $(curl -s https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/mainnet/latest.catchpoint) -d /var/lib/algorand
+- Participation key expiring: Keys have a LAST_VALID round number. Calculate days remaining: (LAST_VALID - CURRENT_ROUND) × 3.3 / 86400. Node stops participating SILENTLY when key expires - no error, just stops voting. Must regenerate BEFORE expiry.
+  Warning at 600,000 rounds remaining (~23 days). Critical at 300,000 rounds (~11 days).
+- Node not ready: After restart, node needs to catch up. Check goal node status for sync progress. Fast-catchup available via catchpoint.
+- Low peers: Firewall blocking ports 4160/4161. Also check DNS relay configuration.
+
+KEY THRESHOLDS:
+- 10 rounds behind ≈ 33 seconds (high)
+- 100 rounds behind ≈ 5.5 minutes (critical)
+- Participation key < 600k rounds remaining = warning (~23 days)
+- Participation key < 300k rounds remaining = critical (~11 days, renew immediately)
+- Peers < 3 = connectivity issue (should have 10+)""",
+
+    "audius": """AUDIUS CREATOR NODE ARCHITECTURE:
+- Application: go-openaudio (OpenAudio protocol)
+- Docker container name: 'my-node'
+- Health endpoint: https://<hostname>/health-check (external) or http://localhost:4000/health_check (internal)
+- Watchtower: runs alongside, auto-updates my-node container
+- Service: Docker-based (NOT systemd). Use docker commands.
+- All nodes run on Proxmox LXC containers sharing host resources
+
+DIAGNOSTIC COMMANDS:
+- Container status: docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.State}}" | grep -E "my-node|watchtower"
+- Container health: docker inspect --format='{{json .State.Health}}' my-node 2>/dev/null | python3 -m json.tool
+- Container uptime: docker inspect --format='{{.State.StartedAt}}' my-node
+- Recent logs: docker logs --tail 100 my-node 2>&1 | tail -50
+- Watchtower logs: docker logs --tail 20 watchtower
+- System resources: docker stats --no-stream
+- OOM check: dmesg | grep -i "oom\|killed" | tail -10
+- Disk usage: docker system df
+
+COMMON FAILURE MODES:
+- Container restarting/unhealthy: FIRST check if Watchtower recently updated the image (docker logs watchtower). Version updates cause expected restarts. Also check for OOM kills in dmesg.
+- Not ready/syncing (chain_height=0, peers=0): Node is initializing after a restart or update. This is EXPECTED to take several minutes. Check docker logs for sync progress.
+- Health check failing: Look at docker logs my-node for error stack traces. Common causes: CometBFT consensus issues, database corruption.
+- ETH balance low: The claims address needs ETH for gas to process on-chain claims. Fund via standard ETH transfer to the claims address.
+
+CRITICAL NOTES:
+- HIGH CPU (~95-100%) IS NORMAL AND EXPECTED for Audius nodes. The CometBFT consensus + IPFS storage is CPU-intensive. Do NOT recommend reducing CPU or restarting for high CPU alone.
+- Watchtower auto-updates may cause brief downtime (1-5 minutes) - this is normal.
+- Multiple Audius nodes share the same Proxmox host. Resource contention between LXC containers is possible.
+- chain_height=0 immediately after restart is expected. Wait 5-10 minutes before investigating.""",
+
+    "cc": """BLOCKCHAIN INFRASTRUCTURE NODE (CC):
+- This is a general-purpose blockchain infrastructure node.
+- Check systemctl for running services.
+- Check docker ps for containerized services.
+- Standard diagnostics: uptime, free -h, df -h, iostat, dmesg.""",
+}
+
+
+def _get_chain_knowledge(chain):
+    """Get chain-specific knowledge, combining static + S3-cached dynamic knowledge."""
+    if not chain:
+        return ""
+
+    chain_lower = chain.lower()
+
+    # Try S3 cache first (populated by docs-fetcher Lambda)
+    try:
+        s3 = boto3.client("s3")
+        obj = s3.get_object(
+            Bucket="blueprint-infra-devops",
+            Key=f"chain-knowledge/{chain_lower}.json",
+        )
+        data = json.loads(obj["Body"].read())
+        static = CHAIN_KNOWLEDGE.get(chain_lower, "")
+        updates = data.get("operational_updates", "")
+        releases = data.get("latest_releases", "")
+        updated_at = data.get("updated_at", "unknown")
+
+        parts = [static]
+        if updates:
+            parts.append(f"\n=== Latest Operational Updates (as of {updated_at}) ===\n{updates}")
+        if releases:
+            parts.append(f"\n=== Recent Releases ===\n{releases}")
+        return "\n".join(parts)
+    except Exception:
+        pass
+
+    # Fallback to static knowledge
+    return CHAIN_KNOWLEDGE.get(chain_lower, "")
+
 
 # =============================================================================
 # Main Handler
@@ -245,6 +444,8 @@ def generate_diagnostic_plan(alertname, instance, chain, description, summary, l
         logger.warning("No Anthropic API key, using fallback commands")
         return FALLBACK_SSM_COMMANDS[:], []
 
+    chain_context = _get_chain_knowledge(chain)
+
     user_message = f"""Alert: {alertname}
 Instance: {instance}
 Chain: {chain or 'N/A'}
@@ -255,6 +456,9 @@ Labels: {json.dumps(labels)}
 
 Runbook:
 {runbook_content or 'No runbook available.'}"""
+
+    if chain_context:
+        user_message += f"\n\n=== Chain-Specific Knowledge ===\n{chain_context}"
 
     try:
         response = _call_claude(api_key, GENERATE_PLAN_SYSTEM, user_message)
@@ -507,7 +711,11 @@ Rules:
 - root_cause: Be specific. Mention the actual process/file/service causing the issue based on diagnostic data.
 - remediation: Max 5 steps. Include actual shell commands where applicable. Steps should be ordered by priority.
 - If AMP data shows a trend, mention whether the issue is sudden or gradual in root_cause.
-- If SSM or AMP data is unavailable, note this and provide best-guess analysis based on available data."""
+- If SSM or AMP data is unavailable, note this and provide best-guess analysis based on available data.
+- Use the chain-specific knowledge to provide targeted root cause and remediation specific to this blockchain project.
+- Reference specific services, ports, APIs, and thresholds for the affected chain — do NOT give generic advice when chain-specific commands exist.
+- For Audius nodes: high CPU (~95-100%) is NORMAL and EXPECTED. Do not flag it as a problem or recommend CPU reduction.
+- For Avalanche: rewarding stake is a binary threshold — below 80% uptime forfeits ALL rewards, not proportionally."""
 
 
 def analyze_diagnostics(alertname, instance, chain, description, summary, amp_data, ssm_output):
@@ -515,6 +723,8 @@ def analyze_diagnostics(alertname, instance, chain, description, summary, amp_da
     api_key = _get_anthropic_key()
     if not api_key:
         return "Root cause analysis unavailable: Anthropic API key not configured"
+
+    chain_context = _get_chain_knowledge(chain)
 
     user_message = f"""Alert: {alertname}
 Instance: {instance}
@@ -527,6 +737,9 @@ Summary: {summary}
 
 === SSM Diagnostic Output ===
 {ssm_output or 'No SSM output available'}"""
+
+    if chain_context:
+        user_message += f"\n\n=== Chain-Specific Knowledge ===\n{chain_context}"
 
     try:
         raw = _call_claude(api_key, ANALYZE_SYSTEM, user_message)
