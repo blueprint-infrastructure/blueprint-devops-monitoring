@@ -620,16 +620,20 @@ def update_notion_page(chain, knowledge, releases_text):
     if knowledge:
         for line in knowledge.split("\n"):
             line = line.strip()
-            if not line:
+            if not line or line == "---":
                 continue
-            if line.endswith(":") and line.isupper():
+            # Strip markdown heading syntax
+            if line.startswith("#"):
+                text = line.lstrip("# ").strip()
+                blocks.append(_notion_heading(text, level=3))
+            # Section headers like "BREAKING CHANGES:" or "KNOWN ISSUES:"
+            elif line.endswith(":") and line.replace(" ", "").replace("_", "").rstrip(":").isupper():
                 blocks.append(_notion_heading(line.rstrip(":"), level=3))
             elif line.startswith("- "):
-                blocks.append(_notion_bullet(line[2:]))
-            elif line.startswith("##"):
-                blocks.append(_notion_heading(line.lstrip("# ").strip(), level=3))
+                # Convert **bold** markdown to Notion rich_text bold
+                blocks.append(_notion_bullet_rich(line[2:]))
             else:
-                blocks.append(_notion_paragraph(line))
+                blocks.append(_notion_paragraph_rich(line))
     else:
         blocks.append(_notion_paragraph("No updates available."))
 
@@ -736,3 +740,42 @@ def _notion_callout(text, emoji="💡"):
 
 def _notion_divider():
     return {"object": "block", "type": "divider", "divider": {}}
+
+
+def _parse_rich_text(text):
+    """Parse markdown **bold** and `code` into Notion rich_text annotations."""
+    import re
+    parts = []
+    # Split by **bold** and `code` patterns
+    pattern = re.compile(r'(\*\*.*?\*\*|`[^`]+`)')
+    last_end = 0
+    for match in pattern.finditer(text):
+        # Add plain text before match
+        if match.start() > last_end:
+            plain = text[last_end:match.start()]
+            if plain:
+                parts.append({"text": {"content": plain}})
+        token = match.group()
+        if token.startswith("**") and token.endswith("**"):
+            parts.append({"text": {"content": token[2:-2]}, "annotations": {"bold": True}})
+        elif token.startswith("`") and token.endswith("`"):
+            parts.append({"text": {"content": token[1:-1]}, "annotations": {"code": True}})
+        last_end = match.end()
+    # Remaining text
+    if last_end < len(text):
+        remaining = text[last_end:]
+        if remaining:
+            parts.append({"text": {"content": remaining}})
+    return parts if parts else [{"text": {"content": text}}]
+
+
+def _notion_paragraph_rich(text):
+    return {"object": "block", "type": "paragraph", "paragraph": {
+        "rich_text": _parse_rich_text(text[:2000])
+    }}
+
+
+def _notion_bullet_rich(text):
+    return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+        "rich_text": _parse_rich_text(text[:2000])
+    }}
