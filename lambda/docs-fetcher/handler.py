@@ -381,11 +381,6 @@ def update_notion_page(chain, knowledge, releases_text):
     # Last updated timestamp
     blocks.append(_notion_callout(f"Last updated: {now}", "🕐"))
 
-    # Static Knowledge section
-    from lambda_rca_knowledge import CHAIN_KNOWLEDGE  # noqa: this won't work in Lambda
-    # Instead, import from rca-analyzer's knowledge - but we can't cross-reference Lambdas
-    # So we just write the dynamic content here
-
     # Operational Updates
     blocks.append(_notion_heading("Operational Updates"))
     for line in (knowledge or "No updates available.").split("\n"):
