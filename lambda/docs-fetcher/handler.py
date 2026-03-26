@@ -41,6 +41,16 @@ S3_PREFIX = "chain-knowledge"
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
 
+# Notion integration
+_notion_token = None
+NOTION_CHAIN_PAGES = {
+    "solana": "32f09a37-0ee0-81f6-85a6-ea797c34e9fe",
+    "ethereum": "32f09a37-0ee0-81ab-bb69-ec252276c988",
+    "avalanche": "32f09a37-0ee0-8146-80fd-c77d94fcc1cb",
+    "algorand": "32f09a37-0ee0-81f8-9b28-c2db2d280999",
+    "audius": "32f09a37-0ee0-8166-9f38-edbff0b15df1",
+}
+
 # =============================================================================
 # Chain Data Sources
 # =============================================================================
@@ -177,6 +187,14 @@ def lambda_handler(event, context):
                 ContentType="application/json",
             )
             logger.info("Stored %s knowledge in s3://%s/%s", chain, S3_BUCKET, s3_key)
+
+            # Also update Notion page
+            try:
+                update_notion_page(chain, knowledge, releases_text)
+                logger.info("Updated Notion page for %s", chain)
+            except Exception:
+                logger.exception("Failed to update Notion for %s (non-fatal)", chain)
+
             results[chain] = "ok"
 
         except Exception:
@@ -310,3 +328,173 @@ def summarize_with_claude(api_key, chain, releases_text, docs_text):
     content = resp_data.get("content", [])
     texts = [block["text"] for block in content if block.get("type") == "text"]
     return "\n".join(texts)
+
+
+# =============================================================================
+# Notion Integration
+# =============================================================================
+
+def _get_notion_token():
+    """Get Notion API token from Secrets Manager (cached)."""
+    global _notion_token
+    if _notion_token is not None:
+        return _notion_token
+
+    secret_arn = os.environ.get("NOTION_SECRET_ARN", "")
+    if not secret_arn:
+        return None
+
+    try:
+        resp = secrets_client.get_secret_value(SecretId=secret_arn)
+        raw = resp["SecretString"]
+        try:
+            secret = json.loads(raw)
+            _notion_token = secret.get("token", "") or secret.get("notion_token", "") or raw
+        except json.JSONDecodeError:
+            _notion_token = raw.strip()
+        return _notion_token
+    except Exception:
+        logger.exception("Failed to get Notion token")
+        return None
+
+
+def update_notion_page(chain, knowledge, releases_text):
+    """Update the Notion page for a chain with latest knowledge."""
+    token = _get_notion_token()
+    if not token:
+        logger.warning("No Notion token, skipping Notion update")
+        return
+
+    page_id = NOTION_CHAIN_PAGES.get(chain)
+    if not page_id:
+        logger.warning("No Notion page ID for chain: %s", chain)
+        return
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Clear existing content blocks
+    _notion_clear_blocks(token, page_id)
+
+    # Build new content blocks
+    blocks = []
+
+    # Last updated timestamp
+    blocks.append(_notion_callout(f"Last updated: {now}", "🕐"))
+
+    # Static Knowledge section
+    from lambda_rca_knowledge import CHAIN_KNOWLEDGE  # noqa: this won't work in Lambda
+    # Instead, import from rca-analyzer's knowledge - but we can't cross-reference Lambdas
+    # So we just write the dynamic content here
+
+    # Operational Updates
+    blocks.append(_notion_heading("Operational Updates"))
+    for line in (knowledge or "No updates available.").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("BREAKING") or line.startswith("KNOWN") or line.startswith("NEW") or line.startswith("RECOMMENDED"):
+            blocks.append(_notion_heading(line.rstrip(":"), level=3))
+        elif line.startswith("- "):
+            blocks.append(_notion_bullet(line[2:]))
+        else:
+            blocks.append(_notion_paragraph(line))
+
+    blocks.append(_notion_divider())
+
+    # Latest Releases
+    blocks.append(_notion_heading("Latest Releases"))
+    if releases_text:
+        for line in releases_text[:3000].split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("Release:"):
+                blocks.append(_notion_heading(line, level=3))
+            elif line.startswith("- ") or line.startswith("* "):
+                blocks.append(_notion_bullet(line[2:]))
+            else:
+                blocks.append(_notion_paragraph(line[:2000]))
+    else:
+        blocks.append(_notion_paragraph("No release data available."))
+
+    # Notion API limits: max 100 blocks per request
+    for i in range(0, len(blocks), 100):
+        chunk = blocks[i:i + 100]
+        _notion_append_blocks(token, page_id, chunk)
+
+
+def _notion_clear_blocks(token, page_id):
+    """Delete all child blocks from a Notion page."""
+    url = f"https://api.notion.com/v1/blocks/{page_id}/children?page_size=100"
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": "2022-06-28",
+    })
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        return
+
+    for block in data.get("results", []):
+        block_id = block["id"]
+        del_req = urllib.request.Request(
+            f"https://api.notion.com/v1/blocks/{block_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Notion-Version": "2022-06-28",
+            },
+            method="DELETE",
+        )
+        try:
+            urllib.request.urlopen(del_req, timeout=10)
+        except Exception:
+            pass
+
+
+def _notion_append_blocks(token, page_id, blocks):
+    """Append blocks to a Notion page."""
+    data = json.dumps({"children": blocks}).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/blocks/{page_id}/children",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        },
+        method="PATCH",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        resp.read()
+
+
+def _notion_heading(text, level=2):
+    key = f"heading_{level}"
+    return {"object": "block", "type": key, key: {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_paragraph(text):
+    return {"object": "block", "type": "paragraph", "paragraph": {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_bullet(text):
+    return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_callout(text, emoji="💡"):
+    return {"object": "block", "type": "callout", "callout": {
+        "icon": {"emoji": emoji},
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_divider():
+    return {"object": "block", "type": "divider", "divider": {}}
