@@ -257,7 +257,33 @@ RCA prompts include per-chain architecture, diagnostic commands, failure modes, 
 - **Algorand** — algod, participation key expiry, round sync
 - **Audius** — Docker-based (my-node), watchtower auto-updates, CPU 100% is normal
 
-Dynamic knowledge is fetched weekly from GitHub releases + official docs via `docs-fetcher` Lambda, stored in S3 and [Notion](https://www.notion.so/32f09a37-0ee0-8154-9efd-cb49c3acd4dc).
+Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetcher` Lambda, stored in S3 and [Notion](https://www.notion.so/32f09a37-0ee0-8154-9efd-cb49c3acd4dc).
+
+#### Data Sources
+
+**GitHub Releases** (latest 3 releases per repo):
+
+| Chain | Repos |
+|---|---|
+| Solana | `anza-xyz/agave`, `firedancer-io/firedancer` |
+| Ethereum | `hyperledger/besu`, `Consensys/teku` |
+| Avalanche | `ava-labs/avalanchego` |
+| Algorand | `algorand/go-algorand` |
+| Audius | `AudiusProject/audius-protocol` |
+
+**Official Documentation**:
+
+| Chain | URLs |
+|---|---|
+| Solana | `docs.solanalabs.com/operations/best-practices/general`, `docs.solanalabs.com/operations/guides/validator-start` |
+| Ethereum | `besu.hyperledger.org/stable/public-networks/how-to/troubleshoot/performance`, `docs.teku.consensys.io/how-to/troubleshoot/general` |
+| Avalanche | `docs.avax.network/nodes/maintain/node-backup-and-restore`, `docs.avax.network/nodes/maintain/upgrade-your-avalanchego-node` |
+| Algorand | `developer.algorand.org/docs/run-a-node/operations/switch_networks/` |
+| Audius | — |
+
+**Static Knowledge** (built into `rca-analyzer/handler.py`):
+
+Each chain has a hardcoded `CHAIN_KNOWLEDGE` entry covering architecture (clients, ports, services), diagnostic commands, common failure modes, and key thresholds. This serves as a baseline when dynamic data is unavailable.
 
 ### Azure Bot Service
 
