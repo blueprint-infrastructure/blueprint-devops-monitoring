@@ -478,6 +478,10 @@ Runbook:
         ssm_commands = ssm_commands[:8]
         promql_queries = promql_queries[:4]
 
+        for i, q in enumerate(promql_queries):
+            logger.info("PromQL[%d] label=%s range=%s query=%s",
+                        i, q.get("label", ""), q.get("range", ""), q.get("query", ""))
+
         return ssm_commands, promql_queries
 
     except (json.JSONDecodeError, KeyError) as e:
@@ -578,6 +582,7 @@ def query_amp_metrics(instance, queries):
 
         try:
             data = _query_amp_range(workspace_id, region, query_expr, time_range, step)
+            logger.info("AMP query '%s': %s", label, data[:200] if data else "empty")
             results.append(f"--- {label} ---\n{data}")
         except urllib.error.HTTPError as e:
             error_body = e.read().decode("utf-8")[:300]

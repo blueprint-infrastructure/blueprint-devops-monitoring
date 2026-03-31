@@ -260,12 +260,18 @@ else
         --arg sender "${ALERT_EMAIL_SENDER:-}" \
         --arg recipients "${ALERT_EMAIL_RECIPIENTS:-}" \
         --arg critical_topic "$SNS_CRITICAL_TOPIC_ARN" \
+        --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
+        --arg rca_function "${RCA_LAMBDA_FUNCTION_NAME:-staking-alert-rca-analyzer}" \
+        --arg ssm_regions "${SSM_REGIONS:-us-east-1,us-west-2,us-west-1,us-east-2}" \
         '{
             Variables: {
                 TEAMS_WEBHOOK_URL: $url,
                 ALERT_EMAIL_SENDER: $sender,
                 ALERT_EMAIL_RECIPIENTS: $recipients,
-                STAKING_ALERT_CRITICAL_TOPIC_ARN: $critical_topic
+                STAKING_ALERT_CRITICAL_TOPIC_ARN: $critical_topic,
+                TEAMS_BOT_SECRET_ARN: $bot_secret,
+                RCA_LAMBDA_FUNCTION_NAME: $rca_function,
+                SSM_REGIONS: $ssm_regions
             }
         }')
 

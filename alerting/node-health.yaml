@@ -15,15 +15,15 @@ groups:
       - alert: AgentHeartbeatMissing
         expr: |
           (
-            max by (instance, job) (last_over_time(up{job="node_exporter"}[7d]))
-            unless on (instance, job)
-            last_over_time(up{job="node_exporter"}[10m])
+            max by (instance, instance_id, job) (last_over_time(up{job="node_exporter",instance_id!=""}[7d]))
+            unless on (instance_id, job)
+            last_over_time(up{job="node_exporter",instance_id!=""}[10m])
           )
           or
           (
-            max by (instance, job) (last_over_time(up{job="prometheus_federation"}[7d]))
-            unless on (instance, job)
-            last_over_time(up{job="prometheus_federation"}[10m])
+            max by (instance, instance_id, job) (last_over_time(up{job="prometheus_federation",instance_id!=""}[7d]))
+            unless on (instance_id, job)
+            last_over_time(up{job="prometheus_federation",instance_id!=""}[10m])
           )
         for: 0m
         labels:

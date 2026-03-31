@@ -18,7 +18,7 @@ groups:
       - alert: DiskSpaceCritical
         expr: |
           (
-            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs"}) * 100
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain!="audius"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain!="audius"}) * 100
           ) < 5
         for: 5m
         labels:
@@ -26,4 +26,18 @@ groups:
         annotations:
           summary: "Disk space is critically low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
           description: "Disk space is below 5% ({{ $values.A.Value }}% available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 5 minutes"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/disk-full.md"
+
+      - alert: DiskSpaceCriticalAudius
+        expr: |
+          (
+            (node_filesystem_avail_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain="audius"} / node_filesystem_size_bytes{mountpoint!~"/tmp|/var/tmp|/run|/sys|/proc|/dev|/boot|/var/lib/docker/overlay.*",fstype=~"ext4|xfs|btrfs",chain="audius"}) * 100
+          ) < 2
+        for: 5m
+        labels:
+          severity: critical
+          chain: audius
+        annotations:
+          summary: "Disk space is critically low on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          description: "Disk space is below 2% ({{ $values.A.Value }}% available) on {{ $labels.instance }}:{{ $labels.mountpoint }} for more than 5 minutes"
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/disk-full.md"

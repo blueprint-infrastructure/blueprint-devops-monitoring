@@ -7,7 +7,7 @@ groups:
           (algorand_participation_key_valid_last - algorand_node_last_round) <= 600000
         for: 5m
         labels:
-          severity: warning
+          severity: critical
           chain: algorand
         annotations:
           summary: "Algorand participation key expiring soon on {{ $labels.instance }}"

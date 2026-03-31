@@ -47,7 +47,7 @@ groups:
         expr: algorand_node_rounds_behind > 10
         for: 5m
         labels:
-          severity: high
+          severity: critical
           chain: algorand
         annotations:
           summary: "Algorand node is {{ $values.A.Value }} rounds behind on {{ $labels.instance }}"
