@@ -1,0 +1,110 @@
+groups:
+  - name: canton_validator
+    interval: 30s
+    rules:
+      # =======================================================================
+      # Container Health
+      # =======================================================================
+
+      - alert: CantonContainerUnhealthy
+        expr: canton_containers_unhealthy{chain="canton"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          chain: canton
+        annotations:
+          summary: "Canton has {{ $value }} unhealthy container(s) on {{ $labels.instance }}"
+          description: >
+            {{ $value }} Docker container(s) on {{ $labels.instance }} have health status = unhealthy
+            for more than 5 minutes. Run `docker ps` and `docker inspect <container>` to investigate.
+          runbook_url: ""
+
+      - alert: CantonContainersCritical
+        expr: canton_containers_unhealthy{chain="canton"} >= 3
+        for: 2m
+        labels:
+          severity: critical
+          chain: canton
+        annotations:
+          summary: "{{ $value }} Canton containers unhealthy on {{ $labels.instance }}"
+          description: >
+            {{ $value }} or more Docker containers are unhealthy on {{ $labels.instance }}.
+            This likely indicates a systemic failure. Check `docker ps` and service logs immediately.
+          runbook_url: ""
+
+      # =======================================================================
+      # Participant / Validator Liveness
+      # =======================================================================
+
+      - alert: CantonParticipantDown
+        expr: canton_participant_up{chain="canton"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: canton
+        annotations:
+          summary: "Canton participant down on {{ $labels.instance }}"
+          description: >
+            splice-validator-participant-1 is not running or is unhealthy on {{ $labels.instance }}
+            for more than 5 minutes. Check: `docker ps` and `docker logs splice-validator-participant-1`.
+          runbook_url: ""
+
+      - alert: CantonValidatorDown
+        expr: canton_validator_up{chain="canton"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain: canton
+        annotations:
+          summary: "Canton validator app down on {{ $labels.instance }}"
+          description: >
+            splice-validator-validator-1 is not running or is unhealthy on {{ $labels.instance }}
+            for more than 5 minutes. Check: `docker ps` and `docker logs splice-validator-validator-1`.
+          runbook_url: ""
+
+      - alert: CantonBackendDown
+        expr: canton_backend_up{chain="canton"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          chain: canton
+        annotations:
+          summary: "Canton Blueprint backend down on {{ $labels.instance }}"
+          description: >
+            cantonblueprint-backend Spring Boot actuator health check is failing on {{ $labels.instance }}.
+            Check: `docker logs cantonblueprint-backend` and `curl http://localhost:8081/actuator/health`.
+          runbook_url: ""
+
+      # =======================================================================
+      # Collector / Agent Heartbeat
+      # =======================================================================
+
+      - alert: CantonCollectorDown
+        expr: canton_collector_scrape_success{chain="canton"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          chain: canton
+        annotations:
+          summary: "Canton metrics collector failing on {{ $labels.instance }}"
+          description: >
+            The canton-collector service on {{ $labels.instance }} is failing to collect metrics.
+            Check: `systemctl status canton-collector` and `journalctl -u canton-collector -n 50`.
+          runbook_url: ""
+
+      - alert: CantonAgentHeartbeatMissing
+        expr: >
+          max by (instance, instance_id) (last_over_time(up{job="node_exporter", chain="canton", instance_id!=""}[7d]))
+          unless on (instance_id)
+          last_over_time(up{job="node_exporter", chain="canton", instance_id!=""}[10m])
+        for: 0m
+        labels:
+          severity: critical
+          chain: canton
+        annotations:
+          summary: "Canton monitoring agent lost on {{ $labels.instance }}"
+          description: >
+            No metrics received from canton node {{ $labels.instance }} ({{ $labels.instance_id }})
+            for more than 10 minutes. The Grafana Agent or node_exporter may have stopped.
+            Check: `systemctl status grafana-agent node_exporter canton-collector`.
+          runbook_url: ""
