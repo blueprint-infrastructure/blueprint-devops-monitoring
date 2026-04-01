@@ -338,8 +338,41 @@ def build_adaptive_card_content(alert_data, unique_alerts):
 
             chain_prefix = f"[{chain}] " if chain else ""
 
-            # For firing alerts with a known instance_id: show instance + inline Analyze button
+            # For firing alerts with a known instance_id: show instance + inline action buttons
             if is_firing and instance_id:
+                alertname_label = labels.get("alertname", title)
+                is_version_drift = "VersionDrift" in alertname_label
+
+                instance_actions = [{
+                    "type": "Action.Submit",
+                    "title": "\U0001f50d Analyze",
+                    "data": {
+                        "action_type": "trigger_rca",
+                        "alertname": alertname_label,
+                        "instance": instance,
+                        "instance_id": instance_id,
+                        "chain": chain,
+                        "severity": labels.get("severity", severity),
+                        "description": annotations.get("description", ""),
+                        "summary": annotations.get("summary", ""),
+                        "runbook_url": annotations.get("runbook_url", ""),
+                        "labels": labels,
+                    },
+                }]
+                if is_version_drift:
+                    instance_actions.append({
+                        "type": "Action.Submit",
+                        "title": "\U0001f4cb Upgrade Plan",
+                        "data": {
+                            "action_type": "upgrade_plan",
+                            "alertname": alertname_label,
+                            "instance": instance,
+                            "instance_id": instance_id,
+                            "chain": chain,
+                            "labels": labels,
+                        },
+                    })
+
                 body.append({
                     "type": "ColumnSet",
                     "columns": [
@@ -358,22 +391,7 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                             "width": "auto",
                             "items": [{
                                 "type": "ActionSet",
-                                "actions": [{
-                                    "type": "Action.Submit",
-                                    "title": "\U0001f50d Analyze",
-                                    "data": {
-                                        "action_type": "trigger_rca",
-                                        "alertname": labels.get("alertname", title),
-                                        "instance": instance,
-                                        "instance_id": instance_id,
-                                        "chain": chain,
-                                        "severity": labels.get("severity", severity),
-                                        "description": annotations.get("description", ""),
-                                        "summary": annotations.get("summary", ""),
-                                        "runbook_url": annotations.get("runbook_url", ""),
-                                        "labels": labels,
-                                    },
-                                }],
+                                "actions": instance_actions,
                             }],
                         },
                     ],

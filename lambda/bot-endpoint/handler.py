@@ -30,6 +30,10 @@ logger.setLevel(logging.INFO)
 lambda_client = boto3.client("lambda")
 secrets_client = boto3.client("secretsmanager")
 
+UPGRADE_LAMBDA_FUNCTION_NAME = os.environ.get(
+    "UPGRADE_LAMBDA_FUNCTION_NAME", "staking-alert-upgrade-analyzer"
+)
+
 _bot_config = None
 
 
@@ -77,9 +81,14 @@ def lambda_handler(event, context):
     # Handle message activities - Action.Submit sends as message type with value field
     if activity_type == "message":
         value = activity.get("value", {})
-        if isinstance(value, dict) and value.get("action_type") == "trigger_rca":
-            logger.info("Action.Submit detected in message activity")
-            return trigger_rca_from_button(activity, value)
+        if isinstance(value, dict):
+            action_type = value.get("action_type", "")
+            if action_type == "trigger_rca":
+                logger.info("Action.Submit detected in message activity")
+                return trigger_rca_from_button(activity, value)
+            elif action_type == "upgrade_plan":
+                logger.info("Upgrade plan Action.Submit detected in message activity")
+                return trigger_upgrade_plan_from_button(activity, value)
         return {"statusCode": 200, "body": ""}
 
     # Default: acknowledge
@@ -98,6 +107,9 @@ def handle_invoke(activity):
 
     if action_type == "trigger_rca":
         return trigger_rca_from_button(activity, data)
+
+    elif action_type == "upgrade_plan":
+        return trigger_upgrade_plan_from_button(activity, data)
 
     logger.warning("Unknown action_type: %s", action_type)
     return _invoke_response(200, "Unknown action")
@@ -156,6 +168,51 @@ def trigger_rca_from_button(activity, data):
     except Exception:
         logger.exception("Failed to trigger RCA")
         return _invoke_response(200, "\u274c Failed to trigger RCA analysis")
+
+
+def trigger_upgrade_plan_from_button(activity, data):
+    """Trigger upgrade plan analysis for a specific instance from a button click."""
+    # Extract conversation info for reply-in-thread
+    conversation = activity.get("conversation", {})
+    reply_to_id = activity.get("replyToId", "")
+    if not reply_to_id:
+        conv_id = conversation.get("id", "")
+        if ";messageid=" in conv_id:
+            reply_to_id = conv_id.split(";messageid=")[-1]
+
+    instance_name = data.get("instance", "")
+    instance_id = data.get("instance_id", "")
+
+    logger.info("Upgrade plan button clicked: instance=%s(%s), parent_msg=%s",
+                instance_name, instance_id, reply_to_id)
+
+    payload = {
+        "alertname":         data.get("alertname", ""),
+        "instance":          instance_name,
+        "instance_id":       instance_id,
+        "chain":             data.get("chain", ""),
+        "labels":            data.get("labels", {}),
+        "parent_message_id": reply_to_id,
+        "service_url":       activity.get("serviceUrl", ""),
+        "channel_id":        conversation.get("id", "").split(";")[0],
+    }
+
+    try:
+        lambda_client.invoke(
+            FunctionName=UPGRADE_LAMBDA_FUNCTION_NAME,
+            InvocationType="Event",  # async
+            Payload=json.dumps(payload).encode("utf-8"),
+        )
+        logger.info("Upgrade analyzer triggered for %s (%s)", instance_name, instance_id)
+
+        return _invoke_response(
+            200,
+            f"\U0001f4cb Generating upgrade plan for **{instance_name}**... "
+            "Results will appear in this thread shortly."
+        )
+    except Exception:
+        logger.exception("Failed to trigger upgrade analyzer")
+        return _invoke_response(200, "\u274c Failed to trigger upgrade plan analysis")
 
 
 def _invoke_response(status_code, message):
