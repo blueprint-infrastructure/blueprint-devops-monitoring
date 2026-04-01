@@ -99,7 +99,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -132,7 +132,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -165,7 +165,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -505,7 +505,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -538,7 +538,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -571,7 +571,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -978,7 +978,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1011,7 +1011,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1044,7 +1044,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1127,7 +1127,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1447,7 +1447,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1480,7 +1480,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1513,7 +1513,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1835,7 +1835,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1868,7 +1868,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -1901,7 +1901,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -2990,7 +2990,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3023,7 +3023,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3056,7 +3056,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3089,7 +3089,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3182,7 +3182,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3231,7 +3231,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3280,7 +3280,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },
@@ -3329,7 +3329,7 @@
               {
                 "id": "custom.cellOptions",
                 "value": {
-                  "type": "color-background",
+                  "type": "color-text",
                   "mode": "basic"
                 }
               },

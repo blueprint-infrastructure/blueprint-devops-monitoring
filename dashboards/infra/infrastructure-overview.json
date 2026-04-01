@@ -115,7 +115,7 @@
             "properties": [
               { "id": "displayName", "value": "Healthy" },
               { "id": "custom.width", "value": 80 },
-              { "id": "custom.displayMode", "value": "color-background-solid" },
+              { "id": "custom.displayMode", "value": "color-text" },
               { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }] },
               { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] } }
             ]
@@ -153,7 +153,7 @@
               { "id": "custom.width", "value": 70 },
               { "id": "unit", "value": "percent" },
               { "id": "decimals", "value": 1 },
-              { "id": "custom.displayMode", "value": "color-background-solid" },
+              { "id": "custom.displayMode", "value": "color-text" },
               { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 70, "color": "yellow" }, { "value": 85, "color": "red" }] } }
             ]
           },
@@ -164,7 +164,7 @@
               { "id": "custom.width", "value": 70 },
               { "id": "unit", "value": "percent" },
               { "id": "decimals", "value": 1 },
-              { "id": "custom.displayMode", "value": "color-background-solid" },
+              { "id": "custom.displayMode", "value": "color-text" },
               { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 70, "color": "yellow" }, { "value": 85, "color": "red" }] } }
             ]
           },
@@ -175,7 +175,7 @@
               { "id": "custom.width", "value": 70 },
               { "id": "unit", "value": "percent" },
               { "id": "decimals", "value": 1 },
-              { "id": "custom.displayMode", "value": "color-background-solid" },
+              { "id": "custom.displayMode", "value": "color-text" },
               { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 80, "color": "yellow" }, { "value": 90, "color": "red" }] } }
             ]
           },
@@ -409,7 +409,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "displayMode": "color-background-solid" },
+          "custom": { "align": "auto", "displayMode": "color-text" },
           "mappings": [
             { "type": "value", "options": { "0": { "text": "Unhealthy", "color": "red" }, "1": { "text": "Healthy", "color": "green" } } }
           ],
