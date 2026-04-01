@@ -2783,25 +2783,25 @@
           "refId": "D"
         },
         {
-          "expr": "max by (instance) (canton_tls_certificate_health{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_domain_time_lag_seconds{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "H"
@@ -2906,10 +2906,10 @@
               "Value #B (lastNotNull)": "Health",
               "Value #C (lastNotNull)": "Participant",
               "Value #D (lastNotNull)": "Validator App",
-              "Value #E (lastNotNull)": "TLS",
-              "Value #F (lastNotNull)": "TLS Expiry (days)",
-              "Value #G (lastNotNull)": "Activity Age (min)",
-              "Value #H (lastNotNull)": "Traffic Remainder",
+              "Value #E (lastNotNull)": "Traffic Remainder",
+              "Value #F (lastNotNull)": "Activity Age (min)",
+              "Value #G (lastNotNull)": "Domain Time Lag (s)",
+              "Value #H (lastNotNull)": "TLS Expiry (days)",
               "Value #I (lastNotNull)": "Version"
             }
           }
@@ -3059,45 +3059,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "TLS"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Invalid",
-                        "color": "red"
-                      },
-                      "1": {
-                        "text": "Valid",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "TLS Expiry (days)"
+              "options": "Traffic Remainder"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "none"
+                "value": "short"
               },
               {
                 "id": "decimals",
@@ -3110,15 +3077,15 @@
                   "steps": [
                     {
                       "value": null,
-                      "color": "red"
+                      "color": "green"
                     },
                     {
-                      "value": 30,
+                      "value": 1,
                       "color": "yellow"
                     },
                     {
-                      "value": 60,
-                      "color": "green"
+                      "value": 100,
+                      "color": "red"
                     }
                   ]
                 }
@@ -3168,6 +3135,104 @@
                     {
                       "value": 30,
                       "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Domain Time Lag (s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 5,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 30,
+                      "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TLS Expiry (days)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 60,
+                      "color": "green"
                     }
                   ]
                 }
