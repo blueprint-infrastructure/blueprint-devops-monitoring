@@ -2765,40 +2765,52 @@
           "refId": "A"
         },
         {
-          "expr": "canton_participant_up{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "max by (instance) (canton_validator_health{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "B"
         },
         {
-          "expr": "canton_validator_up{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "canton_participant_up{chain=\"canton\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "C"
         },
         {
-          "expr": "canton_backend_up{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "canton_validator_up{chain=\"canton\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "D"
         },
         {
-          "expr": "canton_containers_total{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "max by (instance) (canton_tls_certificate_health{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "canton_containers_unhealthy{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
+        },
+        {
+          "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "max by (instance) (canton_splice_version_status{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
         }
       ],
       "transformations": [
@@ -2855,6 +2867,18 @@
                   "lastNotNull"
                 ],
                 "operation": "aggregate"
+              },
+              "Value #H": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #I": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
               }
             }
           }
@@ -2873,16 +2897,20 @@
               "Value #D (lastNotNull)": 4,
               "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
-              "Value #G (lastNotNull)": 7
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Agent",
-              "Value #B (lastNotNull)": "Participant",
-              "Value #C (lastNotNull)": "Validator App",
-              "Value #D (lastNotNull)": "Backend",
-              "Value #E (lastNotNull)": "Containers",
-              "Value #F (lastNotNull)": "Healthy",
-              "Value #G (lastNotNull)": "Unhealthy"
+              "Value #B (lastNotNull)": "Health",
+              "Value #C (lastNotNull)": "Participant",
+              "Value #D (lastNotNull)": "Validator App",
+              "Value #E (lastNotNull)": "TLS",
+              "Value #F (lastNotNull)": "TLS Expiry (days)",
+              "Value #G (lastNotNull)": "Activity Age (min)",
+              "Value #H (lastNotNull)": "Traffic Remainder",
+              "Value #I (lastNotNull)": "Version"
             }
           }
         }
@@ -2921,6 +2949,39 @@
                       },
                       "1": {
                         "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Health"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Unhealthy",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Healthy",
                         "color": "green"
                       }
                     }
@@ -2998,7 +3059,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Backend"
+              "options": "TLS"
             },
             "properties": [
               {
@@ -3015,11 +3076,11 @@
                     "type": "value",
                     "options": {
                       "0": {
-                        "text": "Down",
+                        "text": "Invalid",
                         "color": "red"
                       },
                       "1": {
-                        "text": "Up",
+                        "text": "Valid",
                         "color": "green"
                       }
                     }
@@ -3031,15 +3092,65 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Unhealthy"
+              "options": "TLS Expiry (days)"
             },
             "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 30,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 60,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
               {
                 "id": "custom.cellOptions",
                 "value": {
                   "type": "color-background",
                   "mode": "basic"
                 }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Activity Age (min)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               },
               {
                 "id": "thresholds",
@@ -3051,10 +3162,21 @@
                       "color": "green"
                     },
                     {
-                      "value": 1,
+                      "value": 10,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 30,
                       "color": "red"
                     }
                   ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
                 }
               },
               {
@@ -3062,6 +3184,39 @@
                 "value": {
                   "mode": "thresholds"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Outdated",
+                        "color": "yellow"
+                      },
+                      "1": {
+                        "text": "Current",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },

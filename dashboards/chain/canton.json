@@ -1,11 +1,11 @@
 {
   "title": "Canton Validator",
   "uid": "canton-validator",
-  "description": "Canton / Splice Validator node monitoring — container health, service liveness, system resources",
+  "description": "Canton / Splice Validator monitoring — health, traffic, consensus, TLS, version",
   "tags": ["canton", "validator", "blockchain"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "templating": {
@@ -23,7 +23,7 @@
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "$datasource" },
         "query": {
-          "query": "label_values(canton_containers_total{chain=\"canton\"}, instance)",
+          "query": "label_values(canton_validator_health{chain=\"canton\"}, instance)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -35,179 +35,408 @@
     ]
   },
   "panels": [
+
     {
       "id": 1,
-      "title": "",
-      "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
-      "collapsed": false,
-      "options": { "title": "Service Status" }
+      "title": "Canton Validator Health",
+      "description": "Overall validator health status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_validator_health{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "0": { "text": "Unhealthy", "color": "red", "index": 0 },
+              "1": { "text": "Healthy",   "color": "green", "index": 1 }
+            }}
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "background", "orientation": "auto" }
     },
+
     {
       "id": 2,
-      "title": "Participant",
-      "description": "splice-validator-participant-1 running and not unhealthy",
+      "title": "Docker",
+      "description": "All containers healthy",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_participant_up{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
+        { "expr": "max by (instance) (canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
+            { "type": "value", "options": {
+              "0": { "text": "Unhealthy", "color": "red", "index": 0 },
+              "1": { "text": "All Healthy", "color": "green", "index": 1 }
+            }}
           ],
           "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] },
           "color": { "mode": "thresholds" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "background", "orientation": "auto" }
     },
+
     {
       "id": 3,
-      "title": "Validator App",
-      "description": "splice-validator-validator-1 running and not unhealthy",
+      "title": "Traffic Remainder",
+      "description": "Unprocessed traffic items remaining",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_validator_up{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
+        { "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
-          ],
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "yellow" }, { "value": 100, "color": "red" }] },
           "color": { "mode": "thresholds" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
     },
+
     {
       "id": 4,
-      "title": "Blueprint Backend",
-      "description": "cantonblueprint-backend /actuator/health",
+      "title": "TLS Status",
+      "description": "wallet.validator.theblueprint.xyz certificate health",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "gridPos": { "h": 2, "w": 4, "x": 12, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_backend_up{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
+        { "expr": "max by (instance) (canton_tls_certificate_health{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
+            { "type": "value", "options": {
+              "0": { "text": "INVALID", "color": "red", "index": 0 },
+              "1": { "text": "wallet.validator.theblueprint.xyz", "color": "green", "index": 1 }
+            }}
           ],
           "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] },
           "color": { "mode": "thresholds" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "background", "orientation": "auto" }
     },
+
     {
       "id": 5,
-      "title": "Collector",
-      "description": "canton-collector scrape success",
+      "title": "TLS Cert Expiry",
+      "description": "Days until TLS certificate expires",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "gridPos": { "h": 2, "w": 4, "x": 12, "y": 2 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_collector_scrape_success{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
+        { "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"}) / 7", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "suffix": " week",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 4, "color": "yellow" }, { "value": 8, "color": "green" }] },
+          "color": { "mode": "thresholds" }
         }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 6,
+      "title": "Canton Version",
+      "description": "Current vs latest Splice version",
+      "type": "stat",
+      "gridPos": { "h": 2, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_splice_version_status{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "FAILING", "color": "red", "index": 0 }, "1": { "text": "OK", "color": "green", "index": 1 } } }
+            { "type": "value", "options": {
+              "0": { "text": "Outdated", "color": "yellow", "index": 0 },
+              "1": { "text": "Current",  "color": "green",  "index": 1 }
+            }}
           ],
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] },
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "yellow" }, { "value": 1, "color": "green" }] },
           "color": { "mode": "thresholds" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value", "colorMode": "background" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value", "colorMode": "background", "orientation": "auto" }
     },
+
     {
-      "id": 6,
-      "title": "Last Scrape",
-      "description": "Time since last collector scrape",
+      "id": 7,
+      "title": "Activity Age",
+      "description": "Minutes since last validator activity",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "gridPos": { "h": 2, "w": 4, "x": 16, "y": 2 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "time() - canton_collector_scrape_timestamp_seconds{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
+        { "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 60, "color": "yellow" }, { "value": 300, "color": "red" }] },
+          "unit": "none",
+          "suffix": " min",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 10, "color": "yellow" }, { "value": 30, "color": "red" }] },
           "color": { "mode": "thresholds" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 8,
+      "title": "Validator Activity Metrics",
+      "description": "Traffic remainder, API requests, and sequencer activity over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",         "legendFormat": "Traffic Remainder",        "refId": "A" },
+        { "expr": "max by (instance) (canton_api_requests_last_minute{chain=\"canton\",instance=~\"$instance\"}) * 1000", "legendFormat": "API Requests (x1000)", "refId": "B" },
+        { "expr": "max by (instance) (canton_sequencer_activity_last_2min{chain=\"canton\",instance=~\"$instance\"}) * 1000", "legendFormat": "Sequencer Activity (x1000)", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 9,
+      "title": "Health Status Over Time",
+      "description": "Validator health and container health (1=healthy)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_validator_health{chain=\"canton\",instance=~\"$instance\"})",   "legendFormat": "Validator Health", "refId": "A" },
+        { "expr": "max by (instance) (canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Containers Health", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "max": 1 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Validator Health" },  "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Containers Health" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
     },
 
     {
       "id": 10,
-      "title": "",
-      "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
-      "collapsed": false,
-      "options": { "title": "Container Health" }
-    },
-    {
-      "id": 11,
-      "title": "Running Containers",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 6 },
+      "title": "Container Counts",
+      "description": "Total and healthy running containers",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_containers_total{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
+        { "expr": "max by (instance) (canton_healthy_containers_count{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Healthy Containers", "refId": "A" },
+        { "expr": "max by (instance) (canton_total_containers_count{chain=\"canton\",instance=~\"$instance\"})",   "legendFormat": "Total Containers",   "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Healthy Containers" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Total Containers" },   "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 11,
+      "title": "Activity Age Over Time",
+      "description": "Minutes since last validator activity",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Activity Age", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "blue" }] },
-          "color": { "mode": "fixed", "fixedColor": "blue" }
+          "unit": "m",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 10, "color": "yellow" }, { "value": 30, "color": "red" }] },
+          "color": { "mode": "fixed", "fixedColor": "green" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" }
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
     },
+
     {
       "id": 12,
-      "title": "Healthy",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 6 },
+      "title": "Canton Version",
+      "description": "Current vs latest Splice version",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
+        { "expr": "max by (instance, current_version, latest_version) (canton_splice_version_info{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Current: {{current_version}} | Latest: {{latest_version}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "min": 0, "max": 1,
+          "color": { "fixedColor": "green", "mode": "fixed" }
         }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 20,
+      "title": "Validator Consensus Activities",
+      "description": "Domain time updates, license activities, domain ingestion per 2 min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_domain_time_updates_last_2min{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Domain Time Updates", "refId": "A" },
+        { "expr": "max by (instance) (canton_license_activities_last_2min{chain=\"canton\",instance=~\"$instance\"})",   "legendFormat": "License Activities",    "refId": "B" },
+        { "expr": "max by (instance) (canton_domain_ingestion_last_2min{chain=\"canton\",instance=~\"$instance\"})",    "legendFormat": "Domain Ingestion",      "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 21,
+      "title": "Migration Health & Time Sync",
+      "description": "Migration API checks and domain time lag",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_migration_checks_last_2min{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Migration API Checks", "refId": "A" },
+        { "expr": "max by (instance) (canton_domain_time_lag_seconds{chain=\"canton\",instance=~\"$instance\"})",    "legendFormat": "Time Lag (seconds)",   "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Time Lag (seconds)" },
+            "properties": [{ "id": "unit", "value": "s" }, { "id": "custom.axisPlacement", "value": "right" }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+
+    {
+      "id": 30,
+      "title": "Domain Time Lag",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_domain_time_lag_seconds{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 5, "color": "yellow" }, { "value": 30, "color": "red" }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 31,
+      "title": "Migration API Health",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_migration_checks_last_2min{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Migration Checks",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }] },
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 32,
+      "title": "Domain Time Updates",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_domain_time_updates_last_2min{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Time Updates",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }] },
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 33,
+      "title": "License Activities",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_license_activities_last_2min{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "License Activities",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }] },
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 34,
+      "title": "Domain Ingestion",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance) (canton_domain_ingestion_last_2min{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Domain Ingestion",
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }] },
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "colorMode": "value", "orientation": "auto" }
+    },
+
+    {
+      "id": 35,
+      "title": "Issuing Rounds",
+      "description": "Active Canton issuing round IDs",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "targets": [
+        { "expr": "max by (instance, rounds) (canton_issuing_rounds_info{chain=\"canton\",instance=~\"$instance\"})", "instant": true, "legendFormat": "{{rounds}}", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
@@ -215,83 +444,25 @@
           "color": { "mode": "fixed", "fixedColor": "green" }
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" }
-    },
-    {
-      "id": 13,
-      "title": "Unhealthy",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "$datasource" },
-      "targets": [
-        {
-          "expr": "canton_containers_unhealthy{chain=\"canton\",instance=~\"$instance\"}",
-          "instant": true,
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "red" }] },
-          "color": { "mode": "thresholds" }
-        }
-      },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
-    },
-    {
-      "id": 14,
-      "title": "Container Health Over Time",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "$datasource" },
-      "targets": [
-        {
-          "expr": "canton_containers_total{chain=\"canton\",instance=~\"$instance\"}",
-          "legendFormat": "Total",
-          "refId": "A"
-        },
-        {
-          "expr": "canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"}",
-          "legendFormat": "Healthy",
-          "refId": "B"
-        },
-        {
-          "expr": "canton_containers_unhealthy{chain=\"canton\",instance=~\"$instance\"}",
-          "legendFormat": "Unhealthy",
-          "refId": "C"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "short" },
-        "overrides": [
-          { "matcher": { "id": "byName", "options": "Total" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "Healthy" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "Unhealthy" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
-        ]
-      },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "name", "colorMode": "background", "orientation": "auto" }
     },
 
     {
-      "id": 20,
+      "id": 40,
       "title": "",
       "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
       "collapsed": false,
       "options": { "title": "System Resources" }
     },
     {
-      "id": 21,
+      "id": 41,
       "title": "CPU Usage",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 33 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=\"canton\",instance=~\"$instance\"}[5m])) * 100)",
-          "legendFormat": "CPU %",
-          "refId": "A"
-        }
+        { "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",chain=\"canton\",instance=~\"$instance\"}[5m])) * 100)", "legendFormat": "CPU %", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100,
@@ -302,17 +473,13 @@
       "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
     },
     {
-      "id": 22,
+      "id": 42,
       "title": "Memory Usage",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 33 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{chain=\"canton\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=\"canton\",instance=~\"$instance\"})",
-          "legendFormat": "Memory %",
-          "refId": "A"
-        }
+        { "expr": "100 * (1 - node_memory_MemAvailable_bytes{chain=\"canton\",instance=~\"$instance\"} / node_memory_MemTotal_bytes{chain=\"canton\",instance=~\"$instance\"})", "legendFormat": "Memory %", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100,
@@ -323,17 +490,13 @@
       "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
     },
     {
-      "id": 23,
+      "id": 43,
       "title": "Disk Usage (root)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "targets": [
-        {
-          "expr": "100 * (1 - node_filesystem_avail_bytes{chain=\"canton\",instance=~\"$instance\",mountpoint=\"/\",fstype!=\"tmpfs\"} / node_filesystem_size_bytes{chain=\"canton\",instance=~\"$instance\",mountpoint=\"/\",fstype!=\"tmpfs\"})",
-          "legendFormat": "Disk %",
-          "refId": "A"
-        }
+        { "expr": "100 * (1 - node_filesystem_avail_bytes{chain=\"canton\",instance=~\"$instance\",mountpoint=\"/\",fstype!=\"tmpfs\"} / node_filesystem_size_bytes{chain=\"canton\",instance=~\"$instance\",mountpoint=\"/\",fstype!=\"tmpfs\"})", "legendFormat": "Disk %", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100,
@@ -342,38 +505,6 @@
         }
       },
       "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    {
-      "id": 30,
-      "title": "",
-      "type": "row",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
-      "collapsed": false,
-      "options": { "title": "Network" }
-    },
-    {
-      "id": 31,
-      "title": "Network In/Out",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "$datasource" },
-      "targets": [
-        {
-          "expr": "rate(node_network_receive_bytes_total{chain=\"canton\",instance=~\"$instance\",device!~\"lo|veth.*|br.*|docker.*\"}[5m])",
-          "legendFormat": "In — {{device}}",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(node_network_transmit_bytes_total{chain=\"canton\",instance=~\"$instance\",device!~\"lo|veth.*|br.*|docker.*\"}[5m])",
-          "legendFormat": "Out — {{device}}",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "Bps" }
-      },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
     }
   ]
 }
