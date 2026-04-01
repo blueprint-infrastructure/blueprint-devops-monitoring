@@ -740,44 +740,15 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "d"
+                "value": "none"
               },
               {
                 "id": "decimals",
                 "value": 1
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 3
-                    },
-                    {
-                      "color": "green",
-                      "value": 14
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
+                "id": "custom.displayMode",
+                "value": "auto"
               },
               {
                 "id": "min",
