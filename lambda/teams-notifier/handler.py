@@ -314,7 +314,8 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                 "separator": True,
             })
 
-    # Affected instances with RCA buttons
+    # Affected instances with inline RCA buttons (one row per instance)
+    is_firing = alert_data.get("status", "").lower() == "firing"
     if unique_alerts:
         body.append({
             "type": "TextBlock",
@@ -336,49 +337,53 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                 instance_id = _resolve_instance_id(instance)
 
             chain_prefix = f"[{chain}] " if chain else ""
-            body.append({
-                "type": "TextBlock",
-                "text": f"- {chain_prefix}**{instance}**",
-                "wrap": True,
-            })
 
-        # Add RCA action buttons (only for firing alerts)
-        if alert_data.get("status", "").lower() == "firing":
-            actions = []
-            for alert in unique_alerts:
-                labels = alert.get("labels", {})
-                annotations = alert.get("annotations", {})
-                instance = labels.get("instance", "unknown")
-                instance_id = labels.get("instance_id", "")
-                chain = labels.get("chain", "")
-
-                if not instance_id:
-                    instance_id = _resolve_instance_id(instance)
-
-                if not instance_id:
-                    continue
-
-                actions.append({
-                    "type": "Action.Submit",
-                    "title": f"\U0001f50d Analyze {instance}",
-                    "data": {
-                        "action_type": "trigger_rca",
-                        "alertname": labels.get("alertname", title),
-                        "instance": instance,
-                        "instance_id": instance_id,
-                        "chain": chain,
-                        "severity": labels.get("severity", severity),
-                        "description": annotations.get("description", ""),
-                        "summary": annotations.get("summary", ""),
-                        "runbook_url": annotations.get("runbook_url", ""),
-                        "labels": labels,
-                    },
+            # For firing alerts with a known instance_id: show instance + inline Analyze button
+            if is_firing and instance_id:
+                body.append({
+                    "type": "ColumnSet",
+                    "columns": [
+                        {
+                            "type": "Column",
+                            "width": "stretch",
+                            "verticalContentAlignment": "Center",
+                            "items": [{
+                                "type": "TextBlock",
+                                "text": f"{chain_prefix}**{instance}**",
+                                "wrap": True,
+                            }],
+                        },
+                        {
+                            "type": "Column",
+                            "width": "auto",
+                            "items": [{
+                                "type": "ActionSet",
+                                "actions": [{
+                                    "type": "Action.Submit",
+                                    "title": "\U0001f50d Analyze",
+                                    "data": {
+                                        "action_type": "trigger_rca",
+                                        "alertname": labels.get("alertname", title),
+                                        "instance": instance,
+                                        "instance_id": instance_id,
+                                        "chain": chain,
+                                        "severity": labels.get("severity", severity),
+                                        "description": annotations.get("description", ""),
+                                        "summary": annotations.get("summary", ""),
+                                        "runbook_url": annotations.get("runbook_url", ""),
+                                        "labels": labels,
+                                    },
+                                }],
+                            }],
+                        },
+                    ],
                 })
-
-            if actions:
-                card = _make_card_content(body)
-                card["actions"] = actions
-                return card
+            else:
+                body.append({
+                    "type": "TextBlock",
+                    "text": f"- {chain_prefix}**{instance}**",
+                    "wrap": True,
+                })
 
     return _make_card_content(body)
 
