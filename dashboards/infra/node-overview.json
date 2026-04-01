@@ -2085,7 +2085,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 44
       },
       "targets": [
         {
@@ -2185,7 +2185,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 52
       },
       "targets": [
         {
@@ -2261,7 +2261,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 60
       },
       "targets": [
         {
@@ -2342,7 +2342,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 54
+        "y": 60
       },
       "targets": [
         {
@@ -2423,7 +2423,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 62
+        "y": 68
       },
       "targets": [
         {
@@ -2504,7 +2504,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 62
+        "y": 68
       },
       "targets": [
         {
@@ -2580,7 +2580,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 76
       },
       "targets": [
         {
@@ -2656,7 +2656,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 76
       },
       "targets": [
         {
@@ -2740,6 +2740,356 @@
           "placement": "bottom",
           "showLegend": true,
           "maxHeight": 150
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "Canton Validators",
+      "type": "table",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"node_exporter\",chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "canton_participant_up{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "canton_validator_up{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        },
+        {
+          "expr": "canton_backend_up{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "D"
+        },
+        {
+          "expr": "canton_containers_total{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "E"
+        },
+        {
+          "expr": "canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
+        },
+        {
+          "expr": "canton_containers_unhealthy{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "G"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "instance": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "Value #A": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #B": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #C": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #D": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #E": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #F": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #G": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "instance": 0,
+              "Value #A (lastNotNull)": 1,
+              "Value #B (lastNotNull)": 2,
+              "Value #C (lastNotNull)": 3,
+              "Value #D (lastNotNull)": 4,
+              "Value #E (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
+              "Value #G (lastNotNull)": 7
+            },
+            "renameByName": {
+              "Value #A (lastNotNull)": "Agent",
+              "Value #B (lastNotNull)": "Participant",
+              "Value #C (lastNotNull)": "Validator App",
+              "Value #D (lastNotNull)": "Backend",
+              "Value #E (lastNotNull)": "Containers",
+              "Value #F (lastNotNull)": "Healthy",
+              "Value #G (lastNotNull)": "Unhealthy"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Agent"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Participant"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Validator App"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Backend"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Up",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unhealthy"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    },
+                    {
+                      "value": 1,
+                      "color": "red"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "instance"
+          }
+        ],
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
         }
       }
     }
