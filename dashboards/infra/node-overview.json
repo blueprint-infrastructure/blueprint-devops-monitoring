@@ -2783,10 +2783,16 @@
           "refId": "D"
         },
         {
-          "expr": "canton_containers_healthy{chain=\"canton\",instance=~\"$instance\"}",
+          "expr": "canton_healthy_containers_count{chain=\"canton\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
+        },
+        {
+          "expr": "canton_total_containers_count{chain=\"canton\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "F"
         },
         {
           "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
@@ -2916,13 +2922,7 @@
                 ],
                 "operation": "aggregate"
               },
-              "healthy_count": {
-                "aggregations": [
-                  "lastNotNull"
-                ],
-                "operation": "aggregate"
-              },
-              "total_count": {
+              "Value #F": {
                 "aggregations": [
                   "lastNotNull"
                 ],
@@ -2935,8 +2935,7 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true,
-              "Value #E (lastNotNull)": true
+              "Time": true
             },
             "indexByName": {
               "instance": 0,
@@ -2944,8 +2943,8 @@
               "Value #B (lastNotNull)": 2,
               "Value #C (lastNotNull)": 3,
               "Value #D (lastNotNull)": 4,
-              "healthy_count (lastNotNull)": 5,
-              "total_count (lastNotNull)": 6,
+              "Value #E (lastNotNull)": 5,
+              "Value #F (lastNotNull)": 6,
               "Value #G (lastNotNull)": 7,
               "Value #H (lastNotNull)": 8,
               "Value #I (lastNotNull)": 9,
@@ -2966,8 +2965,8 @@
               "Value #K (lastNotNull)": "Time Updates",
               "Value #L (lastNotNull)": "License Activities",
               "Value #M (lastNotNull)": "Domain Ingestion",
-              "healthy_count (lastNotNull)": "Containers Healthy",
-              "total_count (lastNotNull)": "Containers Total"
+              "Value #E (lastNotNull)": "Containers Healthy",
+              "Value #F (lastNotNull)": "Containers Total"
             }
           }
         }
