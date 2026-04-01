@@ -96,7 +96,7 @@ groups:
       # =======================================================================
 
       - alert: AvalancheRewardingStakeLow
-        expr: avalanche_uptime_rewarding_stake_percent < 97
+        expr: avalanche_uptime_rewarding_stake_percent < 97 and avalanche_validator_active == 1
         for: 5m
         labels:
           severity: warning
@@ -107,7 +107,7 @@ groups:
           runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
 
       - alert: AvalancheRewardingStakeCritical
-        expr: avalanche_uptime_rewarding_stake_percent < 95
+        expr: avalanche_uptime_rewarding_stake_percent < 95 and avalanche_validator_active == 1
         for: 5m
         labels:
           severity: critical

@@ -314,7 +314,8 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                 "separator": True,
             })
 
-    # Affected instances with RCA buttons
+    # Affected instances with inline RCA buttons (one row per instance)
+    is_firing = alert_data.get("status", "").lower() == "firing"
     if unique_alerts:
         body.append({
             "type": "TextBlock",
@@ -336,49 +337,53 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                 instance_id = _resolve_instance_id(instance)
 
             chain_prefix = f"[{chain}] " if chain else ""
-            body.append({
-                "type": "TextBlock",
-                "text": f"- {chain_prefix}**{instance}**",
-                "wrap": True,
-            })
 
-        # Add RCA action buttons (only for firing alerts)
-        if alert_data.get("status", "").lower() == "firing":
-            actions = []
-            for alert in unique_alerts:
-                labels = alert.get("labels", {})
-                annotations = alert.get("annotations", {})
-                instance = labels.get("instance", "unknown")
-                instance_id = labels.get("instance_id", "")
-                chain = labels.get("chain", "")
-
-                if not instance_id:
-                    instance_id = _resolve_instance_id(instance)
-
-                if not instance_id:
-                    continue
-
-                actions.append({
-                    "type": "Action.Submit",
-                    "title": f"\U0001f50d Analyze {instance}",
-                    "data": {
-                        "action_type": "trigger_rca",
-                        "alertname": labels.get("alertname", title),
-                        "instance": instance,
-                        "instance_id": instance_id,
-                        "chain": chain,
-                        "severity": labels.get("severity", severity),
-                        "description": annotations.get("description", ""),
-                        "summary": annotations.get("summary", ""),
-                        "runbook_url": annotations.get("runbook_url", ""),
-                        "labels": labels,
-                    },
+            # For firing alerts with a known instance_id: show instance + inline Analyze button
+            if is_firing and instance_id:
+                body.append({
+                    "type": "ColumnSet",
+                    "columns": [
+                        {
+                            "type": "Column",
+                            "width": "stretch",
+                            "verticalContentAlignment": "Center",
+                            "items": [{
+                                "type": "TextBlock",
+                                "text": f"{chain_prefix}**{instance}**",
+                                "wrap": True,
+                            }],
+                        },
+                        {
+                            "type": "Column",
+                            "width": "auto",
+                            "items": [{
+                                "type": "ActionSet",
+                                "actions": [{
+                                    "type": "Action.Submit",
+                                    "title": "\U0001f50d Analyze",
+                                    "data": {
+                                        "action_type": "trigger_rca",
+                                        "alertname": labels.get("alertname", title),
+                                        "instance": instance,
+                                        "instance_id": instance_id,
+                                        "chain": chain,
+                                        "severity": labels.get("severity", severity),
+                                        "description": annotations.get("description", ""),
+                                        "summary": annotations.get("summary", ""),
+                                        "runbook_url": annotations.get("runbook_url", ""),
+                                        "labels": labels,
+                                    },
+                                }],
+                            }],
+                        },
+                    ],
                 })
-
-            if actions:
-                card = _make_card_content(body)
-                card["actions"] = actions
-                return card
+            else:
+                body.append({
+                    "type": "TextBlock",
+                    "text": f"- {chain_prefix}**{instance}**",
+                    "wrap": True,
+                })
 
     return _make_card_content(body)
 
@@ -441,28 +446,32 @@ def _resolve_instance_id(instance_name):
     if instance_name in _instance_id_cache:
         return _instance_id_cache[instance_name]
 
-    # Build cache on first call
+    # Build cache on first call — query all regions where nodes are deployed
     if not _instance_id_cache:
-        try:
-            paginator = ssm_client.get_paginator("describe_instance_information")
-            for page in paginator.paginate():
-                for inst in page.get("InstanceInformationList", []):
-                    inst_id = inst.get("InstanceId", "")
-                    computer = inst.get("ComputerName", "")
-                    name = inst.get("Name", "")
-                    # Map by ComputerName (hostname)
-                    if computer:
-                        _instance_id_cache[computer] = inst_id
-                        # Also map short name (e.g., "creator-5.theblueprint.xyz" -> "creator-5")
-                        short = computer.split(".")[0]
-                        if short != computer:
-                            _instance_id_cache[short] = inst_id
-                    # Map by Name tag (activation name)
-                    if name:
-                        _instance_id_cache[name] = inst_id
-            logger.info("SSM instance cache built: %d entries", len(_instance_id_cache))
-        except Exception:
-            logger.exception("Failed to build SSM instance cache")
+        ssm_regions = os.environ.get("SSM_REGIONS", "us-east-1,us-west-2,us-west-1,us-east-2").split(",")
+        for region in ssm_regions:
+            try:
+                regional_client = boto3.client("ssm", region_name=region.strip())
+                paginator = regional_client.get_paginator("describe_instance_information")
+                for page in paginator.paginate():
+                    for inst in page.get("InstanceInformationList", []):
+                        inst_id = inst.get("InstanceId", "")
+                        computer = inst.get("ComputerName", "")
+                        name = inst.get("Name", "")
+                        # Map by ComputerName (hostname)
+                        if computer:
+                            _instance_id_cache[computer] = inst_id
+                            # Also map short name (e.g., "creator-5.theblueprint.xyz" -> "creator-5")
+                            short = computer.split(".")[0]
+                            if short != computer:
+                                _instance_id_cache[short] = inst_id
+                        # Map by Name tag (activation name)
+                        if name:
+                            _instance_id_cache[name] = inst_id
+            except Exception:
+                logger.exception("Failed to query SSM in region %s", region)
+        logger.info("SSM instance cache built: %d entries across %d regions",
+                    len(_instance_id_cache), len(ssm_regions))
 
     return _instance_id_cache.get(instance_name, "")
 

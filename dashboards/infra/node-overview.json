@@ -441,6 +441,18 @@
           "format": "table",
           "instant": true,
           "refId": "G"
+        },
+        {
+          "expr": "algorand_node_rounds_behind{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "H"
+        },
+        {
+          "expr": "algorand_participation_key_valid_last{chain=\"algorand\",instance=~\"$instance\"} - algorand_node_last_round{chain=\"algorand\",instance=~\"$instance\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "I"
         }
       ],
       "fieldConfig": {
@@ -499,6 +511,24 @@
               { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "basic" } },
               { "id": "mappings", "value": [{ "type": "value", "options": { "0": { "text": "No", "color": "yellow" }, "1": { "text": "Active", "color": "green" } } }] }
             ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Rounds Behind" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }] } },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Rounds Remaining" },
+            "properties": [
+              { "id": "unit", "value": "locale" },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 300000 }, { "color": "green", "value": 600000 }] } },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
           }
         ]
       },
@@ -521,7 +551,9 @@
               "Value #D": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #E": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
               "Value #F": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
-              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
+              "Value #G": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #H": { "aggregations": ["lastNotNull"], "operation": "aggregate" },
+              "Value #I": { "aggregations": ["lastNotNull"], "operation": "aggregate" }
             }
           }
         },
@@ -537,7 +569,9 @@
               "Value #D (lastNotNull)": 4,
               "Value #E (lastNotNull)": 5,
               "Value #F (lastNotNull)": 6,
-              "Value #G (lastNotNull)": 7
+              "Value #G (lastNotNull)": 7,
+              "Value #H (lastNotNull)": 8,
+              "Value #I (lastNotNull)": 9
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Status",
@@ -546,7 +580,9 @@
               "Value #D (lastNotNull)": "Peers",
               "Value #E (lastNotNull)": "Round",
               "Value #F (lastNotNull)": "Network Round",
-              "Value #G (lastNotNull)": "Part Key"
+              "Value #G (lastNotNull)": "Part Key",
+              "Value #H (lastNotNull)": "Rounds Behind",
+              "Value #I (lastNotNull)": "Rounds Remaining"
             }
           }
         }

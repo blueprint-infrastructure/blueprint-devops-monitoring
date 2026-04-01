@@ -139,6 +139,7 @@ fi
 echo -e "  Adding SSM/AMP/Secrets permissions..."
 RCA_POLICY=$(jq -n \
     --arg amp_arn "arn:aws:aps:${AMP_REGION}:${AWS_ACCOUNT_ID}:workspace/${AMP_WORKSPACE_ID}" \
+    --arg rca_arn "arn:aws:lambda:${AMG_REGION}:${AWS_ACCOUNT_ID}:function:staking-alert-rca-analyzer" \
     '{
     Version: "2012-10-17",
     Statement: [
@@ -149,7 +150,8 @@ RCA_POLICY=$(jq -n \
             Resource: [
                 "arn:aws:ssm:*:*:document/AWS-RunShellScript",
                 "arn:aws:ec2:*:*:instance/*",
-                "arn:aws:ssm:*:*:managed-instance/*"
+                "arn:aws:ssm:*:*:managed-instance/*",
+                "arn:aws:ssm:*:*:*"
             ]
         },
         {
@@ -163,6 +165,12 @@ RCA_POLICY=$(jq -n \
             Effect: "Allow",
             Action: "secretsmanager:GetSecretValue",
             Resource: "*"
+        },
+        {
+            Sid: "InvokeRCA",
+            Effect: "Allow",
+            Action: "lambda:InvokeFunction",
+            Resource: $rca_arn
         }
     ]
 }')
@@ -215,6 +223,7 @@ LAMBDA_ENV=$(jq -n \
     --arg amp_workspace "${AMP_WORKSPACE_ID}" \
     --arg amp_region "${AMP_REGION}" \
     --arg ssm_region "${AMG_REGION}" \
+    --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
     '{
         Variables: {
             TEAMS_WEBHOOK_URL: $webhook,
@@ -222,7 +231,8 @@ LAMBDA_ENV=$(jq -n \
             ANTHROPIC_SECRET_ARN: $anthropic_secret,
             AMP_WORKSPACE_ID: $amp_workspace,
             AMP_REGION: $amp_region,
-            SSM_REGION: $ssm_region
+            SSM_REGION: $ssm_region,
+            TEAMS_BOT_SECRET_ARN: $bot_secret
         }
     }')
 
@@ -360,6 +370,59 @@ else
 fi
 
 # =============================================================================
+# Step 4: Deploy bot-endpoint Lambda
+# =============================================================================
+
+BOT_FUNCTION_NAME="staking-alert-bot-endpoint"
+BOT_SRC="${REPO_ROOT}/lambda/bot-endpoint/handler.py"
+
+echo ""
+echo "Deploying bot-endpoint Lambda..."
+
+if [ -f "$BOT_SRC" ]; then
+    BOT_TMPDIR=$(mktemp -d)
+    cp "$BOT_SRC" "$BOT_TMPDIR/"
+    (cd "$BOT_TMPDIR" && zip -qr function.zip handler.py)
+
+    BOT_ENV=$(jq -n \
+        --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
+        --arg rca_function "${RCA_FUNCTION_NAME}" \
+        '{
+            Variables: {
+                TEAMS_BOT_SECRET_ARN: $bot_secret,
+                RCA_LAMBDA_FUNCTION_NAME: $rca_function
+            }
+        }')
+
+    if aws lambda get-function --function-name "$BOT_FUNCTION_NAME" --region "$AMG_REGION" &>/dev/null; then
+        aws lambda update-function-code \
+            --function-name "$BOT_FUNCTION_NAME" \
+            --zip-file "fileb://${BOT_TMPDIR}/function.zip" \
+            --region "$AMG_REGION" \
+            --output text --query 'FunctionArn' >/dev/null 2>&1
+
+        aws lambda wait function-updated \
+            --function-name "$BOT_FUNCTION_NAME" \
+            --region "$AMG_REGION" 2>/dev/null || sleep 5
+
+        aws lambda update-function-configuration \
+            --function-name "$BOT_FUNCTION_NAME" \
+            --environment "$BOT_ENV" \
+            --timeout 30 \
+            --memory-size 128 \
+            --region "$AMG_REGION" \
+            --output text --query 'FunctionArn' >/dev/null 2>&1
+
+        echo -e "  ${GREEN}✓ Updated: ${BOT_FUNCTION_NAME}${NC}"
+    else
+        echo -e "  ${YELLOW}⚠ ${BOT_FUNCTION_NAME} does not exist, skipping (create manually first)${NC}"
+    fi
+    rm -rf "$BOT_TMPDIR"
+else
+    echo -e "  ${YELLOW}⚠ Bot endpoint source not found: ${BOT_SRC}${NC}"
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 
@@ -368,6 +431,7 @@ echo "=================================================="
 echo "RCA Lambda Deployment Summary"
 echo "=================================================="
 echo -e "${GREEN}✓ RCA Lambda:     ${RCA_FUNCTION_NAME} (256MB, 180s timeout)${NC}"
+echo -e "${GREEN}✓ Bot Endpoint:   ${BOT_FUNCTION_NAME}${NC}"
 echo -e "${GREEN}✓ IAM Role:       ${RCA_ROLE_NAME}${NC}"
 echo -e "${GREEN}✓ Notifier:       ${NOTIFIER_FUNCTION_NAME} (updated with RCA trigger)${NC}"
 echo ""
