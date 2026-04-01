@@ -2783,34 +2783,58 @@
           "refId": "D"
         },
         {
-          "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "canton_healthy_containers_count{chain=\"canton\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "E"
         },
         {
-          "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "canton_total_containers_count{chain=\"canton\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "refId": "F"
         },
         {
-          "expr": "max by (instance) (canton_domain_time_lag_seconds{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_traffic_remainder{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "G"
         },
         {
-          "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_validator_activity_age_minutes{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "H"
         },
         {
-          "expr": "max by (instance) (canton_splice_version_status{chain=\"canton\",instance=~\"$instance\"})",
+          "expr": "max by (instance) (canton_domain_time_lag_seconds{chain=\"canton\",instance=~\"$instance\"})",
           "format": "table",
           "instant": true,
           "refId": "I"
+        },
+        {
+          "expr": "max by (instance) (canton_tls_certificate_days_until_expiry{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "J"
+        },
+        {
+          "expr": "max by (instance) (canton_domain_time_updates_last_2min{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "K"
+        },
+        {
+          "expr": "max by (instance) (canton_license_activities_last_2min{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "L"
+        },
+        {
+          "expr": "max by (instance) (canton_domain_ingestion_last_2min{chain=\"canton\",instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "M"
         }
       ],
       "transformations": [
@@ -2879,6 +2903,30 @@
                   "lastNotNull"
                 ],
                 "operation": "aggregate"
+              },
+              "Value #J": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #K": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #L": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
+              },
+              "Value #M": {
+                "aggregations": [
+                  "lastNotNull"
+                ],
+                "operation": "aggregate"
               }
             }
           }
@@ -2899,18 +2947,26 @@
               "Value #F (lastNotNull)": 6,
               "Value #G (lastNotNull)": 7,
               "Value #H (lastNotNull)": 8,
-              "Value #I (lastNotNull)": 9
+              "Value #I (lastNotNull)": 9,
+              "Value #J (lastNotNull)": 10,
+              "Value #K (lastNotNull)": 11,
+              "Value #L (lastNotNull)": 12,
+              "Value #M (lastNotNull)": 13
             },
             "renameByName": {
               "Value #A (lastNotNull)": "Agent",
               "Value #B (lastNotNull)": "Health",
               "Value #C (lastNotNull)": "Participant",
               "Value #D (lastNotNull)": "Validator App",
-              "Value #E (lastNotNull)": "Traffic Remainder",
-              "Value #F (lastNotNull)": "Activity Age (min)",
-              "Value #G (lastNotNull)": "Domain Time Lag (s)",
-              "Value #H (lastNotNull)": "TLS Expiry (days)",
-              "Value #I (lastNotNull)": "Version"
+              "Value #E (lastNotNull)": "Containers Healthy",
+              "Value #F (lastNotNull)": "Containers Total",
+              "Value #G (lastNotNull)": "Traffic Remainder",
+              "Value #H (lastNotNull)": "Activity Age (min)",
+              "Value #I (lastNotNull)": "Domain Time Lag (s)",
+              "Value #J (lastNotNull)": "TLS Expiry (days)",
+              "Value #K (lastNotNull)": "Time Updates",
+              "Value #L (lastNotNull)": "License Activities",
+              "Value #M (lastNotNull)": "Domain Ingestion"
             }
           }
         }
@@ -3053,6 +3109,38 @@
                     }
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Containers Healthy"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Containers Total"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           },
@@ -3255,33 +3343,48 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Version"
+              "options": "Time Updates"
             },
             "properties": [
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
+                "id": "unit",
+                "value": "short"
               },
               {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": {
-                        "text": "Outdated",
-                        "color": "yellow"
-                      },
-                      "1": {
-                        "text": "Current",
-                        "color": "green"
-                      }
-                    }
-                  }
-                ]
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "License Activities"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Domain Ingestion"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               }
             ]
           },
