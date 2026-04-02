@@ -13,12 +13,14 @@ Architecture:
         Phase 4: Bot Framework API → Adaptive Card thread reply
 
 Environment variables:
-    ANTHROPIC_SECRET_ARN: Secrets Manager ARN for Anthropic API key
+    ANTHROPIC_SECRET_ARN: Secrets Manager ARN — JSON with "api_key" (required)
+                          and optional "github_token" for validator-context access
     TEAMS_BOT_SECRET_ARN: Secrets Manager ARN for Bot Framework credentials
     AMP_WORKSPACE_ID: Amazon Managed Prometheus workspace ID
     AMP_REGION: AMP region (default us-east-1)
 """
 
+import base64
 import json
 import logging
 import os
@@ -46,11 +48,21 @@ _bot_token = None
 _bot_token_expires = 0
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_MAX_TOKENS = 2048
+CLAUDE_MAX_TOKENS = 4096
 
 # =============================================================================
 # Chain Configuration
 # =============================================================================
+
+VALIDATOR_CONTEXT_REPO = "blueprint-infrastructure/validator-context"
+
+# Normalize chain aliases sent by teams-notifier (e.g. "avax" → "avalanche")
+CHAIN_ALIASES = {
+    "avax":      "avalanche",
+    "eth":       "ethereum",
+    "algo":      "algorand",
+    "cc":        "audius",
+}
 
 CHAIN_REPOS = {
     "avalanche": ["ava-labs/avalanchego"],
@@ -290,6 +302,86 @@ def _tag_lte(tag_a, tag_b):
     return _parse(tag_a) <= _parse(tag_b)
 
 
+def _fetch_validator_context(chain):
+    """Fetch internal upgrade docs from blueprint-infrastructure/validator-context (best-effort).
+
+    Reads {chain}/wiki/upgrade.md and any non-empty files in {chain}/scripts/.
+    Silently skips missing files (404) or when no GitHub token is configured.
+    """
+    github_token = _get_github_token()
+    if not github_token:
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "staking-alert-upgrade-analyzer",
+    }
+    results = []
+
+    # 1. {chain}/wiki/upgrade.md
+    wiki_url = (
+        f"https://api.github.com/repos/{VALIDATOR_CONTEXT_REPO}"
+        f"/contents/{chain}/wiki/upgrade.md"
+    )
+    try:
+        req = urllib.request.Request(wiki_url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            file_data = json.loads(resp.read())
+            content = base64.b64decode(file_data["content"]).decode("utf-8").strip()
+            if content:
+                results.append(
+                    f"=== Internal Upgrade Guide ({chain}/wiki/upgrade.md) ===\n{content[:3000]}"
+                )
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            logger.warning("validator-context wiki fetch HTTP %d for %s", e.code, chain)
+    except Exception as e:
+        logger.warning("validator-context wiki fetch failed for %s: %s", chain, e)
+
+    # 2. {chain}/scripts/ — fetch non-empty script files
+    scripts_url = (
+        f"https://api.github.com/repos/{VALIDATOR_CONTEXT_REPO}"
+        f"/contents/{chain}/scripts"
+    )
+    try:
+        req = urllib.request.Request(scripts_url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            files = json.loads(resp.read())
+            for f in files:
+                if f["name"] == ".gitkeep" or f.get("size", 0) == 0:
+                    continue
+                download_url = f.get("download_url", "")
+                if not download_url:
+                    continue
+                try:
+                    dl_req = urllib.request.Request(
+                        download_url,
+                        headers={
+                            "Authorization": f"Bearer {github_token}",
+                            "User-Agent": "staking-alert-upgrade-analyzer",
+                        },
+                        method="GET",
+                    )
+                    with urllib.request.urlopen(dl_req, timeout=8) as fr:
+                        script_content = fr.read().decode("utf-8").strip()
+                        if script_content:
+                            results.append(
+                                f"=== Internal Script: {f['name']} ===\n{script_content[:2000]}"
+                            )
+                except Exception as e:
+                    logger.warning("Failed to fetch script %s: %s", f["name"], e)
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            logger.warning("validator-context scripts fetch HTTP %d for %s", e.code, chain)
+    except Exception as e:
+        logger.warning("validator-context scripts fetch failed for %s: %s", chain, e)
+
+    if results:
+        logger.info("validator-context: fetched %d item(s) for chain=%s", len(results), chain)
+    return "\n\n".join(results)
+
+
 # =============================================================================
 # Phase 3: Claude Upgrade Plan Generation
 # =============================================================================
@@ -473,29 +565,48 @@ def _build_upgrade_card(alertname, instance, chain, current_ver, latest_ver, pla
 # Bot Framework Thread Reply
 # =============================================================================
 
+_anthropic_secret_cache = None
+
+
+def _load_anthropic_secret():
+    """Load the Anthropic secret JSON (cached). Contains api_key and optional github_token."""
+    global _anthropic_secret_cache, _anthropic_api_key
+    if _anthropic_secret_cache is not None:
+        return _anthropic_secret_cache
+
+    secret_arn = os.environ.get("ANTHROPIC_SECRET_ARN", "")
+    if not secret_arn:
+        return {}
+
+    try:
+        resp = secrets_client.get_secret_value(SecretId=secret_arn)
+        raw = resp["SecretString"]
+        try:
+            _anthropic_secret_cache = json.loads(raw)
+        except json.JSONDecodeError:
+            _anthropic_secret_cache = {"api_key": raw.strip()}
+        return _anthropic_secret_cache
+    except Exception:
+        logger.exception("Failed to load Anthropic secret")
+        return {}
+
+
 def _get_anthropic_key():
     """Get Anthropic API key from Secrets Manager (cached)."""
     global _anthropic_api_key
     if _anthropic_api_key is not None:
         return _anthropic_api_key
 
-    secret_arn = os.environ.get("ANTHROPIC_SECRET_ARN", "")
-    if not secret_arn:
-        return None
-
-    try:
-        resp = secrets_client.get_secret_value(SecretId=secret_arn)
-        raw = resp["SecretString"]
-        try:
-            secret = json.loads(raw)
-            _anthropic_api_key = secret.get("api_key", "") or secret.get("key", "") or raw
-        except json.JSONDecodeError:
-            _anthropic_api_key = raw.strip()
+    secret = _load_anthropic_secret()
+    _anthropic_api_key = secret.get("api_key", "") or secret.get("key", "")
+    if _anthropic_api_key:
         logger.info("Anthropic API key loaded (length=%d)", len(_anthropic_api_key))
-        return _anthropic_api_key
-    except Exception:
-        logger.exception("Failed to load Anthropic API key")
-        return None
+    return _anthropic_api_key or None
+
+
+def _get_github_token():
+    """Get GitHub token for private repo access (optional, from same secret as Anthropic key)."""
+    return _load_anthropic_secret().get("github_token", "")
 
 
 def _call_claude(api_key, system_prompt, user_message):
@@ -664,7 +775,7 @@ def lambda_handler(event, context):
     alertname   = event.get("alertname", "")
     instance    = event.get("instance", "")
     instance_id = event.get("instance_id", "")
-    chain       = event.get("chain", "").lower()
+    chain       = CHAIN_ALIASES.get(event.get("chain", "").lower(), event.get("chain", "").lower())
     labels      = event.get("labels", {})
     parent_msg  = event.get("parent_message_id", "")
     service_url = event.get("service_url", "")
@@ -684,7 +795,7 @@ def lambda_handler(event, context):
 
     logger.info("Versions: %s → %s", current_ver, latest_ver)
 
-    # ── Phase 2: GitHub release notes ────────────────────────────────────────
+    # ── Phase 2: GitHub release notes + internal validator-context docs ──────
     repos = _get_repos_for_chain(chain, alertname)
     release_notes_parts = []
     for repo in repos:
@@ -692,8 +803,12 @@ def lambda_handler(event, context):
         if notes:
             release_notes_parts.append(f"## {repo}\n\n{notes}")
 
+    internal_context = _fetch_validator_context(chain)
+    if internal_context:
+        release_notes_parts.append(internal_context)
+
     release_notes = "\n\n".join(release_notes_parts) if release_notes_parts else "No release notes available."
-    logger.info("Fetched release notes (%d chars)", len(release_notes))
+    logger.info("Fetched release notes + internal context (%d chars)", len(release_notes))
 
     # ── Phase 3: Claude upgrade plan ─────────────────────────────────────────
     try:
