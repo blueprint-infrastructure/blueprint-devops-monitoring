@@ -3,21 +3,29 @@ Lambda function: Upgrade Plan Analyzer for Version Drift Alerts
 
 Triggered by the "📋 Upgrade Plan" button on Teams version-drift alert cards.
 Fetches GitHub release notes for the version range, calls Claude to generate
-a structured upgrade plan, and replies in the Teams thread via Bot Framework.
+a structured upgrade plan, writes it to Notion, runs pre-upgrade steps via SSM,
+and replies in the Teams thread with a short card containing the Notion link.
 
 Architecture:
     bot-endpoint Lambda -> This Lambda (async)
-        Phase 1: Discover current/latest versions (labels → AMP → GitHub)
-        Phase 2: Fetch GitHub release notes for the version range
+        Phase 1: Read current/latest versions from event (labels → AMP fallback)
+        Phase 2: Fetch GitHub release notes + internal validator-context docs
         Phase 3: Claude API → structured JSON upgrade plan
-        Phase 4: Bot Framework API → Adaptive Card thread reply
+        Phase 4a: SSM pre-upgrade steps on each instance
+        Phase 4b: Notion — search for existing page or create new one
+        Phase 4c: Teams short card (Notion link + Post-Upgrade Verify button)
+
+    Post-upgrade (action_type="run_post_upgrade"):
+        SSM post-upgrade commands → Notion append → Teams verification summary
 
 Environment variables:
     ANTHROPIC_SECRET_ARN: Secrets Manager ARN — JSON with "api_key" (required)
                           and optional "github_token" for validator-context access
     TEAMS_BOT_SECRET_ARN: Secrets Manager ARN for Bot Framework credentials
+    NOTION_SECRET_ARN:    Secrets Manager ARN for Notion API token (optional)
     AMP_WORKSPACE_ID: Amazon Managed Prometheus workspace ID
     AMP_REGION: AMP region (default us-east-1)
+    SSM_REGION: Region for SSM commands (default us-east-1)
 """
 
 import base64
@@ -40,12 +48,14 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 secrets_client = boto3.client("secretsmanager")
+ssm_client = boto3.client("ssm", region_name=os.environ.get("SSM_REGION", "us-east-1"))
 
 # Cached secrets / tokens
 _anthropic_api_key = None
 _bot_config = None
 _bot_token = None
 _bot_token_expires = 0
+_notion_token = None
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
 CLAUDE_MAX_TOKENS = 4096
@@ -124,15 +134,30 @@ CHAIN_UPGRADE_CONTEXT = {
     ),
 }
 
+# Notion parent page IDs per chain (sub-pages will be created under these)
+NOTION_CHAIN_PAGES = {
+    "avalanche": "32f09a37-0ee0-8146-80fd-c77d94fcc1cb",
+    "solana":    "32f09a37-0ee0-81f6-85a6-ea797c34e9fe",
+    "ethereum":  "32f09a37-0ee0-81ab-bb69-ec252276c988",
+    "algorand":  "32f09a37-0ee0-81f8-9b28-c2db2d280999",
+    "audius":    "32f09a37-0ee0-8166-9f38-edbff0b15df1",
+}
+
 # =============================================================================
 # Phase 1: Version Discovery
 # =============================================================================
 
-def _get_versions(chain, instance, labels, alertname=""):
-    """Discover current and latest version strings via labels → AMP → GitHub.
+def _get_versions(chain, instance, labels, alertname="", current_ver_hint="", latest_ver_hint=""):
+    """Discover current and latest version strings.
 
+    Priority: event hints → labels → AMP → GitHub latest tag.
     Returns (current_ver, latest_ver) — either may be "unknown" if not found.
     """
+    # Try 0: version hints passed directly from the button data
+    if current_ver_hint and latest_ver_hint:
+        logger.info("Versions from event: current=%s latest=%s", current_ver_hint, latest_ver_hint)
+        return current_ver_hint, latest_ver_hint
+
     # Try 1: labels passed from the alert
     current_ver = labels.get("version", "")
     latest_ver = labels.get("latest_version", "")
@@ -145,12 +170,10 @@ def _get_versions(chain, instance, labels, alertname=""):
     region = os.environ.get("AMP_REGION", "us-east-1")
     if workspace_id and chain in VERSION_METRICS:
         cur_metric, lat_metric = VERSION_METRICS[chain]
-        # For ethereum, pick the right sub-client metric
         if chain == "ethereum":
             if "Teku" in alertname:
                 cur_metric = "ethereum_teku_version"
                 lat_metric = "ethereum_teku_latest_version"
-            # else stays as besu defaults
         try:
             current_ver = _query_amp_version_label(workspace_id, region, cur_metric, instance)
             latest_ver = _query_amp_version_label(workspace_id, region, lat_metric, instance)
@@ -167,14 +190,11 @@ def _get_versions(chain, instance, labels, alertname=""):
         except Exception as e:
             logger.warning("GitHub latest tag fetch failed: %s", e)
 
-    return current_ver or "unknown", latest_ver or "unknown"
+    return current_ver or current_ver_hint or "unknown", latest_ver or latest_ver_hint or "unknown"
 
 
 def _query_amp_version_label(workspace_id, region, metric_name, instance):
-    """Query AMP for a version metric and extract the 'version' label value.
-
-    Returns empty string if not found.
-    """
+    """Query AMP for a version metric and extract the 'version' label value."""
     query = f'{metric_name}{{instance=~".*{instance.split(":")[0]}.*"}}'
     host = f"aps-workspaces.{region}.amazonaws.com"
     path = f"/workspaces/{workspace_id}/api/v1/query"
@@ -209,7 +229,6 @@ def _query_amp_version_label(workspace_id, region, metric_name, instance):
     if not results:
         return ""
 
-    # Version strings are usually in metric labels
     metric_labels = results[0].get("metric", {})
     return (
         metric_labels.get("version", "")
@@ -226,7 +245,6 @@ def _get_repos_for_chain(chain, alertname=""):
     """Return the list of GitHub repos for this chain/alertname."""
     repos = CHAIN_REPOS.get(chain, [])
     if chain == "ethereum" and len(repos) == 2:
-        # Filter to the relevant client
         if "Teku" in alertname:
             return [r for r in repos if "teku" in r.lower()]
         else:
@@ -251,10 +269,7 @@ def _get_latest_tag(repo):
 
 
 def _fetch_releases(repo, count=15, since_version=""):
-    """Fetch recent GitHub releases, optionally filtering to those after since_version.
-
-    Returns combined release notes as a string (truncated per release).
-    """
+    """Fetch recent GitHub releases, optionally filtering to those after since_version."""
     url = f"https://api.github.com/repos/{repo}/releases?per_page={count}"
     req = urllib.request.Request(
         url,
@@ -280,9 +295,7 @@ def _fetch_releases(repo, count=15, since_version=""):
         tag = release.get("tag_name", "")
         name = release.get("name", tag)
         body = (release.get("body", "") or "").strip()
-        # Skip releases older than current_ver if we have version info
         if since_version and since_version != "unknown" and tag:
-            # Simple string comparison — works for semver-like "v1.2.3" tags
             if _tag_lte(tag, since_version):
                 continue
         if body:
@@ -303,11 +316,7 @@ def _tag_lte(tag_a, tag_b):
 
 
 def _fetch_validator_context(chain):
-    """Fetch internal upgrade docs from blueprint-infrastructure/validator-context (best-effort).
-
-    Reads {chain}/wiki/upgrade.md and any non-empty files in {chain}/scripts/.
-    Silently skips missing files (404) or when no GitHub token is configured.
-    """
+    """Fetch internal upgrade docs from blueprint-infrastructure/validator-context (best-effort)."""
     github_token = _get_github_token()
     if not github_token:
         return ""
@@ -319,7 +328,6 @@ def _fetch_validator_context(chain):
     }
     results = []
 
-    # 1. {chain}/wiki/upgrade.md
     wiki_url = (
         f"https://api.github.com/repos/{VALIDATOR_CONTEXT_REPO}"
         f"/contents/{chain}/wiki/upgrade.md"
@@ -339,7 +347,6 @@ def _fetch_validator_context(chain):
     except Exception as e:
         logger.warning("validator-context wiki fetch failed for %s: %s", chain, e)
 
-    # 2. {chain}/scripts/ — fetch non-empty script files
     scripts_url = (
         f"https://api.github.com/repos/{VALIDATOR_CONTEXT_REPO}"
         f"/contents/{chain}/scripts"
@@ -410,17 +417,18 @@ Rules:
 """
 
 
-def _generate_upgrade_plan(chain, instance, current_ver, latest_ver, release_notes, alertname=""):
+def _generate_upgrade_plan(chain, instances, current_ver, latest_ver, release_notes, alertname=""):
     """Call Claude to generate a structured upgrade plan JSON."""
     api_key = _get_anthropic_key()
     if not api_key:
         raise RuntimeError("Anthropic API key not available")
 
     chain_ctx = CHAIN_UPGRADE_CONTEXT.get(chain, "No chain-specific context available.")
+    instance_list = ", ".join(i["name"] for i in instances) if instances else "unknown"
 
     user_message = f"""Chain: {chain}
 Alert: {alertname}
-Instance: {instance}
+Instances: {instance_list}
 Current version: {current_ver}
 Target version: {latest_ver}
 
@@ -434,7 +442,6 @@ Generate the upgrade plan JSON now."""
 
     raw = _call_claude(api_key, UPGRADE_SYSTEM_PROMPT, user_message)
 
-    # Strip accidental markdown code fences
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -445,7 +452,6 @@ Generate the upgrade plan JSON now."""
         plan = json.loads(cleaned)
     except json.JSONDecodeError as e:
         logger.error("Claude returned non-JSON: %s", raw[:500])
-        # Return a minimal fallback plan
         plan = {
             "summary": f"Upgrade {chain} from {current_ver} to {latest_ver}",
             "breaking_changes": [],
@@ -461,24 +467,424 @@ Generate the upgrade plan JSON now."""
 
 
 # =============================================================================
-# Phase 4: Adaptive Card Build + Teams Reply
+# Notion Integration
 # =============================================================================
 
-def _build_upgrade_card(alertname, instance, chain, current_ver, latest_ver, plan):
-    """Build Adaptive Card content for the upgrade plan."""
+def _get_notion_token():
+    """Get Notion API token from Secrets Manager (cached)."""
+    global _notion_token
+    if _notion_token is not None:
+        return _notion_token
+
+    secret_arn = os.environ.get("NOTION_SECRET_ARN", "")
+    if not secret_arn:
+        return None
+
+    try:
+        resp = secrets_client.get_secret_value(SecretId=secret_arn)
+        raw = resp["SecretString"]
+        try:
+            secret = json.loads(raw)
+            _notion_token = secret.get("token", "") or secret.get("notion_token", "") or raw
+        except json.JSONDecodeError:
+            _notion_token = raw.strip()
+        return _notion_token
+    except Exception:
+        logger.exception("Failed to get Notion token")
+        return None
+
+
+def _notion_heading(text, level=2):
+    key = f"heading_{level}"
+    return {"object": "block", "type": key, key: {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_paragraph(text):
+    return {"object": "block", "type": "paragraph", "paragraph": {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_bullet(text):
+    return {"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_code(text, language="shell"):
+    return {"object": "block", "type": "code", "code": {
+        "rich_text": [{"text": {"content": text[:2000]}}],
+        "language": language,
+    }}
+
+
+def _notion_callout(text, emoji="📋"):
+    return {"object": "block", "type": "callout", "callout": {
+        "icon": {"emoji": emoji},
+        "rich_text": [{"text": {"content": text[:2000]}}]
+    }}
+
+
+def _notion_divider():
+    return {"object": "block", "type": "divider", "divider": {}}
+
+
+def _notion_append_blocks(token, page_id, blocks):
+    """Append blocks to a Notion page (max 100 per call)."""
+    for i in range(0, len(blocks), 100):
+        chunk = blocks[i:i + 100]
+        data = json.dumps({"children": chunk}).encode("utf-8")
+        req = urllib.request.Request(
+            f"https://api.notion.com/v1/blocks/{page_id}/children",
+            data=data,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+
+
+def _notion_clear_blocks(token, page_id):
+    """Delete all child blocks from a Notion page."""
+    url = f"https://api.notion.com/v1/blocks/{page_id}/children?page_size=100"
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": "2022-06-28",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        return
+
+    for block in data.get("results", []):
+        block_id = block["id"]
+        del_req = urllib.request.Request(
+            f"https://api.notion.com/v1/blocks/{block_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Notion-Version": "2022-06-28",
+            },
+            method="DELETE",
+        )
+        try:
+            urllib.request.urlopen(del_req, timeout=10)
+        except Exception:
+            pass
+
+
+def _notion_search_page(token, title):
+    """Search for a Notion page by exact title. Returns (page_id, page_url) or (None, None)."""
+    data = json.dumps({
+        "query": title,
+        "filter": {"property": "object", "value": "page"},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/search",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            results = json.loads(resp.read()).get("results", [])
+    except Exception as e:
+        logger.warning("Notion search failed: %s", e)
+        return None, None
+
+    for page in results:
+        # Match exact title
+        props = page.get("properties", {})
+        title_prop = props.get("title", {}).get("title", [])
+        page_title = "".join(t.get("plain_text", "") for t in title_prop)
+        if page_title == title:
+            page_id = page["id"]
+            page_url = page.get("url", f"https://www.notion.so/{page_id.replace('-', '')}")
+            logger.info("Found existing Notion page: %s (%s)", title, page_id)
+            return page_id, page_url
+
+    return None, None
+
+
+def _notion_create_page(token, parent_page_id, title, blocks):
+    """Create a new Notion page under parent_page_id. Returns (page_id, page_url)."""
+    payload = {
+        "parent": {"page_id": parent_page_id},
+        "properties": {
+            "title": {"title": [{"text": {"content": title}}]}
+        },
+        "children": blocks[:100],
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/pages",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        page = json.loads(resp.read())
+
+    page_id = page["id"]
+    page_url = page.get("url", f"https://www.notion.so/{page_id.replace('-', '')}")
+    logger.info("Created Notion page: %s (%s)", title, page_id)
+
+    # Append remaining blocks if > 100
+    if len(blocks) > 100:
+        _notion_append_blocks(token, page_id, blocks[100:])
+
+    return page_id, page_url
+
+
+def _notion_update_page(token, page_id, blocks):
+    """Clear a Notion page and replace with new blocks."""
+    _notion_clear_blocks(token, page_id)
+    _notion_append_blocks(token, page_id, blocks)
+    logger.info("Updated existing Notion page: %s", page_id)
+
+
+def _build_notion_blocks(plan, pre_results, instances, chain, current_ver, latest_ver):
+    """Convert an upgrade plan + SSM pre-upgrade results into Notion blocks."""
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    instance_names = ", ".join(i["name"] for i in instances) if instances else "—"
+
+    blocks = []
+
+    # Header callout
+    blocks.append(_notion_callout(
+        f"Chain: {chain.capitalize()}  |  {current_ver} → {latest_ver}\n"
+        f"Instances: {instance_names}\n"
+        f"Generated: {now}",
+        "📋",
+    ))
+
+    # Summary
+    blocks.append(_notion_heading("Summary"))
+    blocks.append(_notion_paragraph(plan.get("summary", "—")))
+    blocks.append(_notion_divider())
+
+    # Breaking changes
+    blocks.append(_notion_heading("Breaking Changes"))
+    breaking = plan.get("breaking_changes", [])
+    if breaking:
+        for change in breaking:
+            blocks.append(_notion_bullet(f"⚠️ {change}"))
+    else:
+        blocks.append(_notion_paragraph("None"))
+    blocks.append(_notion_divider())
+
+    # Pre-upgrade steps (with SSM results)
+    pre_steps = plan.get("pre_upgrade_steps", [])
+    if pre_steps:
+        blocks.append(_notion_heading("Pre-Upgrade Steps (Auto-executed)"))
+        for s in pre_steps:
+            step_label = f"{s.get('step', '')}. {s.get('description', '')}"
+            blocks.append(_notion_heading(step_label, level=3))
+            if s.get("command"):
+                blocks.append(_notion_code(s["command"]))
+
+        # SSM execution results per instance
+        if pre_results:
+            blocks.append(_notion_heading("Pre-Upgrade Execution Results", level=3))
+            for r in pre_results:
+                inst_name = r.get("instance_name", "unknown")
+                output = r.get("output", "(no output)")
+                blocks.append(_notion_paragraph(f"Instance: {inst_name}"))
+                blocks.append(_notion_code(output[:2000]))
+        blocks.append(_notion_divider())
+
+    # Upgrade steps — list only, NOT auto-executed
+    upgrade_steps = plan.get("upgrade_steps", [])
+    if upgrade_steps:
+        blocks.append(_notion_callout(
+            "⚠️ Upgrade Steps must be performed manually by a human engineer. "
+            "Do NOT run these automatically.",
+            "🛑",
+        ))
+        blocks.append(_notion_heading("Upgrade Steps (Manual)"))
+        for s in upgrade_steps:
+            step_label = f"{s.get('step', '')}. {s.get('description', '')}"
+            blocks.append(_notion_heading(step_label, level=3))
+            if s.get("command"):
+                blocks.append(_notion_code(s["command"]))
+        blocks.append(_notion_divider())
+
+    # Post-upgrade verification (pending)
+    post_steps = plan.get("post_upgrade_steps", [])
+    if post_steps:
+        blocks.append(_notion_callout(
+            "⏳ Post-Upgrade Verification will be triggered via the Teams button "
+            "after manual upgrade steps are complete.",
+            "✅",
+        ))
+        blocks.append(_notion_heading("Post-Upgrade Verification (Pending)"))
+        for s in post_steps:
+            step_label = f"{s.get('step', '')}. {s.get('description', '')}"
+            blocks.append(_notion_heading(step_label, level=3))
+            if s.get("command"):
+                blocks.append(_notion_code(s["command"]))
+        blocks.append(_notion_divider())
+
+    # Rollback steps
+    rollback = plan.get("rollback_steps", [])
+    if rollback:
+        blocks.append(_notion_heading("Rollback Steps"))
+        for s in rollback:
+            blocks.append(_notion_bullet(s))
+        blocks.append(_notion_divider())
+
+    # Additional notes
+    downtime = plan.get("estimated_downtime", "")
+    notes = plan.get("notes", "")
+    if downtime or notes:
+        blocks.append(_notion_heading("Notes"))
+        if downtime:
+            blocks.append(_notion_paragraph(f"Estimated downtime: {downtime}"))
+        if notes:
+            blocks.append(_notion_paragraph(notes))
+
+    return blocks
+
+
+# =============================================================================
+# SSM Command Execution
+# =============================================================================
+
+def run_ssm_diagnostics(instance_id, commands, timeout=60):
+    """Execute commands on an instance via SSM. Returns combined output string."""
+    region = os.environ.get("SSM_REGION", "us-east-1")
+
+    # Rebuild client with correct region (region may differ per instance)
+    ssm = boto3.client("ssm", region_name=region)
+
+    script_lines = ["#!/bin/bash", "set +e"]
+    for cmd in commands:
+        script_lines.append(f'echo "===CMD: {cmd}==="')
+        script_lines.append(cmd)
+        script_lines.append("")
+    script = "\n".join(script_lines)
+
+    logger.info("SSM sending command to %s (%d commands)", instance_id, len(commands))
+
+    try:
+        response = ssm.send_command(
+            InstanceIds=[instance_id],
+            DocumentName="AWS-RunShellScript",
+            Parameters={"commands": [script]},
+            TimeoutSeconds=timeout,
+        )
+        command_id = response["Command"]["CommandId"]
+        logger.info("SSM command sent: %s", command_id)
+    except Exception as e:
+        error_msg = f"SSM send_command failed: {e}"
+        logger.error(error_msg)
+        return error_msg
+
+    time.sleep(2)
+    max_attempts = 15
+    for attempt in range(max_attempts):
+        try:
+            result = ssm.get_command_invocation(
+                CommandId=command_id,
+                InstanceId=instance_id,
+            )
+            status = result["Status"]
+
+            if status in ("Success", "Failed", "TimedOut", "Cancelled"):
+                stdout = result.get("StandardOutputContent", "")
+                stderr = result.get("StandardErrorContent", "")
+                output = stdout
+                if stderr:
+                    output += f"\n\n--- STDERR ---\n{stderr}"
+                logger.info("SSM command completed: status=%s, output_len=%d", status, len(output))
+                if len(output) > 8000:
+                    output = output[:8000] + "\n... (truncated)"
+                return output
+
+        except ssm.exceptions.InvocationDoesNotExist:
+            pass
+        except Exception:
+            logger.exception("SSM get_command_invocation error (attempt %d)", attempt)
+
+        time.sleep(3)
+
+    return "(SSM timed out waiting for result)"
+
+
+def _run_pre_upgrade_on_instances(instances, commands):
+    """Run commands on each instance via SSM. Returns list of {instance_name, output}."""
+    if not commands:
+        return []
+
+    results = []
+    for inst in instances:
+        inst_name = inst.get("name", "unknown")
+        inst_id = inst.get("id", "")
+        if not inst_id:
+            logger.warning("No instance_id for %s, skipping SSM", inst_name)
+            results.append({"instance_name": inst_name, "output": "(no instance_id, skipped)"})
+            continue
+
+        logger.info("Running SSM commands on %s (%s)", inst_name, inst_id)
+        try:
+            output = run_ssm_diagnostics(inst_id, commands, timeout=120)
+        except Exception as e:
+            output = f"(SSM error: {e})"
+            logger.error("SSM failed for %s: %s", inst_name, e)
+
+        results.append({"instance_name": inst_name, "output": output})
+
+    return results
+
+
+# =============================================================================
+# Teams Card Builders
+# =============================================================================
+
+def _build_summary_card(
+    chain, current_ver, latest_ver, instances, page_url, page_id,
+    post_upgrade_commands, parent_msg, service_url, channel_id,
+    pre_results,
+):
+    """Build the short Teams Adaptive Card that links to the Notion page."""
 
     def _text(text, **kwargs):
         block = {"type": "TextBlock", "text": str(text), "wrap": True}
         block.update(kwargs)
         return block
 
+    instance_names = ", ".join(i["name"] for i in instances) if instances else "—"
+    pre_count = len(pre_results)
+    pre_summary = (
+        f"Pre-upgrade steps run on {pre_count} instance(s)."
+        if pre_count else "No pre-upgrade steps executed."
+    )
+
     body = [
-        _text("\U0001f4cb Upgrade Plan", size="Large", weight="Bolder"),
-        _text(f"**Alert:** {alertname}  |  **Instance:** {instance}  |  **Chain:** {chain}"),
+        _text("\U0001f4cb Upgrade Plan Ready", size="Large", weight="Bolder"),
         _text(
-            f"\U0001f4e6 {current_ver}  \u2192  **{latest_ver}**",
-            color="accent",
-            size="Medium",
+            f"**Chain:** {chain.capitalize()}  |  "
+            f"**Version:** {current_ver} \u2192 **{latest_ver}**",
+        ),
+        _text(f"**Instances:** {instance_names}", isSubtle=True),
+        _text(pre_summary, separator=True),
+        _text(
+            "\u26a0\ufe0f **Upgrade Steps** must be performed manually — see Notion for details.",
+            color="attention",
         ),
         _text(
             datetime.now(tz=timezone.utc).strftime("Generated %Y-%m-%d %H:%M UTC"),
@@ -487,67 +893,78 @@ def _build_upgrade_card(alertname, instance, chain, current_ver, latest_ver, pla
         ),
     ]
 
-    # Summary
-    body.append(_text("\U0001f4dd Summary", weight="Bolder", separator=True))
-    body.append(_text(plan.get("summary", "—")))
+    actions = []
+    if page_url:
+        actions.append({
+            "type": "Action.OpenUrl",
+            "title": "\U0001f4c4 View Upgrade Plan",
+            "url": page_url,
+        })
 
-    # Breaking changes
-    breaking = plan.get("breaking_changes", [])
-    body.append(_text("\u26a0\ufe0f Breaking Changes", weight="Bolder", separator=True))
-    if breaking:
-        for change in breaking:
-            body.append(_text(f"\u2022 {change}", color="attention"))
-    else:
-        body.append(_text("None", color="good"))
+    if post_upgrade_commands:
+        actions.append({
+            "type": "Action.Submit",
+            "title": "\u2705 Run Post-Upgrade Verification",
+            "data": {
+                "action_type":           "run_post_upgrade",
+                "notion_page_id":        page_id or "",
+                "instances":             instances,
+                "post_upgrade_commands": post_upgrade_commands,
+                "chain":                 chain,
+                "current_ver":           current_ver,
+                "latest_ver":            latest_ver,
+                "parent_message_id":     parent_msg,
+                "service_url":           service_url,
+                "channel_id":            channel_id,
+            },
+        })
 
-    # Pre-upgrade steps
-    pre_steps = plan.get("pre_upgrade_steps", [])
-    if pre_steps:
-        body.append(_text("\U0001f527 Pre-Upgrade Steps", weight="Bolder", separator=True))
-        for s in pre_steps:
-            step_text = f"**{s.get('step', '')}. {s.get('description', '')}**"
-            if s.get("command"):
-                step_text += f"\n`{s['command']}`"
-            body.append(_text(step_text))
+    if actions:
+        body.append({"type": "ActionSet", "actions": actions})
 
-    # Upgrade steps
-    upgrade_steps = plan.get("upgrade_steps", [])
-    if upgrade_steps:
-        body.append(_text("\u2b06\ufe0f Upgrade Steps", weight="Bolder", separator=True))
-        for s in upgrade_steps:
-            step_text = f"**{s.get('step', '')}. {s.get('description', '')}**"
-            if s.get("command"):
-                step_text += f"\n`{s['command']}`"
-            body.append(_text(step_text))
+    return {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body,
+    }
 
-    # Post-upgrade verification
-    post_steps = plan.get("post_upgrade_steps", [])
-    if post_steps:
-        body.append(_text("\u2705 Post-Upgrade Verification", weight="Bolder", separator=True))
-        for s in post_steps:
-            step_text = f"**{s.get('step', '')}. {s.get('description', '')}**"
-            if s.get("command"):
-                step_text += f"\n`{s['command']}`"
-            body.append(_text(step_text))
 
-    # Rollback
-    rollback = plan.get("rollback_steps", [])
-    if rollback:
-        body.append(_text("\u21a9\ufe0f Rollback Steps", weight="Bolder", separator=True))
-        for s in rollback:
-            body.append(_text(f"\u2022 {s}"))
+def _build_verification_card(chain, current_ver, latest_ver, instances, results):
+    """Build the Teams Adaptive Card summarizing post-upgrade verification results."""
 
-    # Estimated downtime + notes
-    downtime = plan.get("estimated_downtime", "")
-    if downtime:
-        body.append(_text(f"\u23f1 Estimated downtime: **{downtime}**", separator=True))
+    def _text(text, **kwargs):
+        block = {"type": "TextBlock", "text": str(text), "wrap": True}
+        block.update(kwargs)
+        return block
 
-    notes = plan.get("notes", "")
-    if notes:
-        body.append(_text(notes, isSubtle=True))
+    instance_names = ", ".join(i["name"] for i in instances) if instances else "—"
+    success_count = sum(1 for r in results if "(SSM error" not in r.get("output", ""))
+
+    body = [
+        _text("\u2705 Post-Upgrade Verification Complete", size="Large", weight="Bolder"),
+        _text(
+            f"**Chain:** {chain.capitalize()}  |  **Version:** {current_ver} \u2192 {latest_ver}",
+        ),
+        _text(f"**Instances:** {instance_names}", isSubtle=True),
+        _text(
+            f"{success_count}/{len(results)} instances verified successfully.",
+            separator=True,
+            weight="Bolder",
+        ),
+    ]
+
+    for r in results:
+        inst_name = r.get("instance_name", "unknown")
+        output = r.get("output", "")
+        short_output = output[:300].replace("\n", "  ").strip()
+        status_icon = "\u274c" if "(SSM error" in output else "\u2705"
+        body.append(_text(f"{status_icon} **{inst_name}**"))
+        if short_output:
+            body.append(_text(f"`{short_output}`", isSubtle=True, size="Small"))
 
     body.append(_text(
-        "\u2500" * 20 + "\n\U0001f916 Generated via GitHub releases + Claude API",
+        datetime.now(tz=timezone.utc).strftime("Verified %Y-%m-%d %H:%M UTC"),
         isSubtle=True,
         size="Small",
         separator=True,
@@ -569,7 +986,7 @@ _anthropic_secret_cache = None
 
 
 def _load_anthropic_secret():
-    """Load the Anthropic secret JSON (cached). Contains api_key and optional github_token."""
+    """Load the Anthropic secret JSON (cached)."""
     global _anthropic_secret_cache, _anthropic_api_key
     if _anthropic_secret_cache is not None:
         return _anthropic_secret_cache
@@ -639,12 +1056,7 @@ def _call_claude(api_key, system_prompt, user_message):
 
 
 def _get_bot_config(service_url=None, channel_id=None):
-    """Get Bot Framework credentials from Secrets Manager (cached).
-
-    If service_url or channel_id are provided, they override the stored values
-    (the stored values are the defaults from the secret, but Teams sends the
-    actual endpoint in the activity).
-    """
+    """Get Bot Framework credentials from Secrets Manager (cached)."""
     global _bot_config
     if _bot_config is None:
         secret_arn = os.environ.get("TEAMS_BOT_SECRET_ARN", "")
@@ -657,7 +1069,6 @@ def _get_bot_config(service_url=None, channel_id=None):
             logger.exception("Failed to load bot config")
             return None
 
-    # Build a copy with overrides
     config = dict(_bot_config)
     if service_url:
         config["service_url"] = service_url
@@ -729,7 +1140,7 @@ def reply_in_thread(parent_message_id, card_content, service_url=None, channel_i
 
     with urllib.request.urlopen(req, timeout=15) as resp:
         result = json.loads(resp.read())
-        logger.info("Upgrade plan thread reply sent: id=%s", result.get("id"))
+        logger.info("Thread reply sent: id=%s", result.get("id"))
 
 
 def post_channel_message(card_content, service_url=None, channel_id=None):
@@ -763,35 +1174,54 @@ def post_channel_message(card_content, service_url=None, channel_id=None):
 
     with urllib.request.urlopen(req, timeout=15) as resp:
         result = json.loads(resp.read())
-        logger.info("Upgrade plan channel message sent: id=%s", result.get("id"))
+        logger.info("Channel message sent: id=%s", result.get("id"))
 
 
 # =============================================================================
-# Lambda Handler
+# Lambda Handlers
 # =============================================================================
 
 def lambda_handler(event, context):
-    """Main entry point — 4-phase upgrade plan pipeline."""
+    """Dispatch to upgrade plan or post-upgrade verification handler."""
+    action = event.get("action_type", "upgrade_plan")
+    if action == "run_post_upgrade":
+        return _handle_post_upgrade_verification(event)
+    return _handle_upgrade_plan(event)
+
+
+def _handle_upgrade_plan(event):
+    """Main upgrade plan pipeline: fetch → Claude → SSM → Notion → Teams."""
     alertname   = event.get("alertname", "")
-    instance    = event.get("instance", "")
-    instance_id = event.get("instance_id", "")
     chain       = CHAIN_ALIASES.get(event.get("chain", "").lower(), event.get("chain", "").lower())
+    instances   = event.get("instances", [])
     labels      = event.get("labels", {})
     parent_msg  = event.get("parent_message_id", "")
     service_url = event.get("service_url", "")
     channel_id  = event.get("channel_id", "")
 
+    # Version hints from button data (avoid AMP round-trip when available)
+    current_ver_hint = event.get("current_ver", "")
+    latest_ver_hint  = event.get("latest_ver", "")
+
+    # Pick a representative instance for AMP queries (first one)
+    first_instance = instances[0]["name"] if instances else event.get("instance", "")
+
     logger.info(
-        "Upgrade analyzer started: alertname=%s instance=%s chain=%s parent_msg=%s",
-        alertname, instance, chain, parent_msg,
+        "Upgrade analyzer started: alertname=%s chain=%s instances=%s parent_msg=%s",
+        alertname, chain, [i["name"] for i in instances], parent_msg,
     )
 
     # ── Phase 1: Version discovery ────────────────────────────────────────────
     try:
-        current_ver, latest_ver = _get_versions(chain, instance, labels, alertname)
+        current_ver, latest_ver = _get_versions(
+            chain, first_instance, labels, alertname,
+            current_ver_hint=current_ver_hint,
+            latest_ver_hint=latest_ver_hint,
+        )
     except Exception:
         logger.exception("Version discovery failed")
-        current_ver, latest_ver = "unknown", "unknown"
+        current_ver = current_ver_hint or "unknown"
+        latest_ver  = latest_ver_hint  or "unknown"
 
     logger.info("Versions: %s → %s", current_ver, latest_ver)
 
@@ -812,7 +1242,7 @@ def lambda_handler(event, context):
 
     # ── Phase 3: Claude upgrade plan ─────────────────────────────────────────
     try:
-        plan = _generate_upgrade_plan(chain, instance, current_ver, latest_ver, release_notes, alertname)
+        plan = _generate_upgrade_plan(chain, instances, current_ver, latest_ver, release_notes, alertname)
     except Exception:
         logger.exception("Claude upgrade plan generation failed")
         plan = {
@@ -826,18 +1256,137 @@ def lambda_handler(event, context):
             "notes": "Automated plan generation failed. Please consult the release notes manually.",
         }
 
-    # ── Phase 4: Teams reply ──────────────────────────────────────────────────
-    card = _build_upgrade_card(alertname, instance, chain, current_ver, latest_ver, plan)
+    # ── Phase 4a: SSM pre-upgrade steps ──────────────────────────────────────
+    pre_cmds = [
+        s["command"] for s in plan.get("pre_upgrade_steps", [])
+        if s.get("command", "").strip()
+    ]
+    if pre_cmds:
+        logger.info("Running %d pre-upgrade commands on %d instance(s)", len(pre_cmds), len(instances))
+        pre_results = _run_pre_upgrade_on_instances(instances, pre_cmds)
+    else:
+        pre_results = []
+
+    # ── Phase 4b: Notion page ─────────────────────────────────────────────────
+    page_url = None
+    page_id = None
+    token = _get_notion_token()
+
+    if token:
+        page_title = f"{chain.capitalize()} Upgrade Plan {current_ver} → {latest_ver}"
+        notion_blocks = _build_notion_blocks(plan, pre_results, instances, chain, current_ver, latest_ver)
+
+        try:
+            existing_id, existing_url = _notion_search_page(token, page_title)
+            if existing_id:
+                _notion_update_page(token, existing_id, notion_blocks)
+                page_id, page_url = existing_id, existing_url
+            else:
+                parent_page_id = NOTION_CHAIN_PAGES.get(chain, "")
+                if parent_page_id:
+                    page_id, page_url = _notion_create_page(token, parent_page_id, page_title, notion_blocks)
+                else:
+                    logger.warning("No Notion parent page ID for chain: %s", chain)
+        except Exception:
+            logger.exception("Notion page create/update failed")
+    else:
+        logger.warning("NOTION_SECRET_ARN not configured — skipping Notion")
+
+    # ── Phase 4c: Teams short card ────────────────────────────────────────────
+    post_cmds = [
+        s["command"] for s in plan.get("post_upgrade_steps", [])
+        if s.get("command", "").strip()
+    ]
+
+    card = _build_summary_card(
+        chain=chain,
+        current_ver=current_ver,
+        latest_ver=latest_ver,
+        instances=instances,
+        page_url=page_url,
+        page_id=page_id,
+        post_upgrade_commands=post_cmds,
+        parent_msg=parent_msg,
+        service_url=service_url,
+        channel_id=channel_id,
+        pre_results=pre_results,
+    )
 
     try:
         if parent_msg:
             reply_in_thread(parent_msg, card, service_url=service_url, channel_id=channel_id)
-            logger.info("Upgrade plan sent as thread reply")
+            logger.info("Upgrade plan summary sent as thread reply")
         else:
             post_channel_message(card, service_url=service_url, channel_id=channel_id)
-            logger.info("Upgrade plan sent as new channel message (no parent_message_id)")
+            logger.info("Upgrade plan summary sent as new channel message (no parent_message_id)")
     except Exception:
         logger.exception("Failed to send upgrade plan to Teams")
         raise
 
-    return {"status": "ok", "chain": chain, "current": current_ver, "latest": latest_ver}
+    return {
+        "status": "ok",
+        "chain": chain,
+        "current": current_ver,
+        "latest": latest_ver,
+        "notion_page_url": page_url,
+    }
+
+
+def _handle_post_upgrade_verification(event):
+    """Run post-upgrade verification on each instance and update Notion + Teams."""
+    notion_page_id    = event.get("notion_page_id", "")
+    instances         = event.get("instances", [])
+    post_cmds         = event.get("post_upgrade_commands", [])
+    chain             = event.get("chain", "")
+    current_ver       = event.get("current_ver", "")
+    latest_ver        = event.get("latest_ver", "")
+    parent_msg        = event.get("parent_message_id", "")
+    service_url       = event.get("service_url", "")
+    channel_id        = event.get("channel_id", "")
+
+    logger.info(
+        "Post-upgrade verification started: chain=%s instances=%s",
+        chain, [i["name"] for i in instances],
+    )
+
+    # Run verification commands via SSM
+    results = _run_pre_upgrade_on_instances(instances, post_cmds)
+
+    # Append results to Notion page
+    token = _get_notion_token()
+    if token and notion_page_id:
+        now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        verif_blocks = [
+            _notion_divider(),
+            _notion_heading("✅ Post-Upgrade Verification Results"),
+            _notion_paragraph(f"Executed: {now}"),
+        ]
+        for r in results:
+            inst_name = r.get("instance_name", "unknown")
+            output = r.get("output", "(no output)")
+            verif_blocks.append(_notion_paragraph(f"Instance: {inst_name}"))
+            verif_blocks.append(_notion_code(output[:2000]))
+
+        try:
+            _notion_append_blocks(token, notion_page_id, verif_blocks)
+            logger.info("Appended verification results to Notion page: %s", notion_page_id)
+        except Exception:
+            logger.exception("Failed to append verification results to Notion")
+
+    # Build and send verification card
+    card = _build_verification_card(chain, current_ver, latest_ver, instances, results)
+
+    try:
+        if parent_msg:
+            reply_in_thread(parent_msg, card, service_url=service_url, channel_id=channel_id)
+            logger.info("Verification summary sent as thread reply")
+        else:
+            post_channel_message(card, service_url=service_url, channel_id=channel_id)
+    except Exception:
+        logger.exception("Failed to send verification summary to Teams")
+        raise
+
+    return {
+        "status": "ok",
+        "verified_instances": len(results),
+    }

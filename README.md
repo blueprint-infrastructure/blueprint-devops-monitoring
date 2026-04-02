@@ -58,8 +58,14 @@ monitoring/
 │   │   └── handler.py
 │   ├── bot-endpoint/        # Bot messaging endpoint (handles button clicks)
 │   │   └── handler.py
+│   ├── upgrade-analyzer/    # Version upgrade plan generator (Claude + Notion + SSM)
+│   │   └── handler.py
 │   └── docs-fetcher/        # Chain knowledge fetcher (GitHub + docs → S3 + Notion)
 │       └── handler.py
+├── tests/                   # Unit tests (run locally before deploy)
+│   ├── test_teams_notifier.py
+│   ├── test_bot_endpoint.py
+│   └── test_upgrade_analyzer.py
 └── scripts/                 # Deployment scripts
     ├── validate.sh          # Local validation script
     ├── deploy.sh            # Master deployment script
@@ -221,24 +227,42 @@ aws s3 cp agents/install-<chain>-monitoring.sh s3://blueprint-infra-devops/agent
 
 Each script installs three components: node_exporter (system metrics), a chain-specific collector (business metrics), and Grafana Agent (pushes to AMP via SigV4).
 
-## Automated Root Cause Analysis (RCA)
+## Automated Root Cause Analysis (RCA) and Upgrade Planning
 
-On-demand root cause analysis triggered via card buttons in Teams. Uses SSM + AMP metrics + Claude AI with chain-specific knowledge.
+On-demand root cause analysis and upgrade plan generation triggered via card buttons in Teams. Uses SSM + AMP metrics + Claude AI with chain-specific knowledge.
 
 ### How It Works
 
 ```
 AMG Alert → SNS → teams-notifier Lambda → Bot Framework API → Teams Adaptive Card
-                                                                (with "🔍 Analyze" buttons per instance)
+                                                                (with "🔍 Analyze" per instance,
+                                                                 "📋 {Chain} Upgrade Plan" per version group)
                                         → SES Email (critical only)
 
-User clicks button → Teams → bot-endpoint Lambda (API Gateway)
-                               → rca-analyzer Lambda (async)
-                                     ├→ Claude API: generate diagnostic commands (chain-aware)
-                                     ├→ SSM: execute commands on the machine
-                                     ├→ AMP: query historical metric trends
-                                     ├→ Claude API: analyze root cause
-                                     └→ Bot Framework: reply-in-thread with diagnosis
+User clicks "🔍 Analyze" → bot-endpoint → rca-analyzer Lambda (async)
+    ├→ Claude API: generate diagnostic commands (chain-aware)
+    ├→ SSM: execute commands on the machine
+    ├→ AMP: query historical metric trends
+    ├→ Claude API: analyze root cause
+    └→ Bot Framework: reply-in-thread with diagnosis card
+
+User clicks "📋 {Chain} Upgrade Plan" → bot-endpoint → upgrade-analyzer Lambda (async)
+    ├→ GitHub: fetch release notes for version range
+    ├→ validator-context: fetch internal upgrade guide + scripts
+    ├→ Claude API: generate structured JSON upgrade plan
+    ├→ SSM: auto-run pre-upgrade steps on each affected instance
+    ├→ Notion: create/update upgrade plan page (one page per chain+version)
+    │    ├── Pre-Upgrade Steps + SSM execution results
+    │    ├── Upgrade Steps (list only — human engineer must execute)
+    │    └── Post-Upgrade Verification (pending)
+    └→ Bot Framework: reply-in-thread with short card
+         ├── "📄 View Upgrade Plan" → Notion link
+         └── "✅ Run Post-Upgrade Verification" button
+
+Engineer completes manual upgrade, clicks verify button → bot-endpoint → upgrade-analyzer (async)
+    ├→ SSM: run post-upgrade verification on each instance
+    ├→ Notion: append verification results to upgrade page
+    └→ Bot Framework: reply-in-thread with verification summary
 ```
 
 ### RCA Output
@@ -247,6 +271,14 @@ Each RCA reply (in the alert message's thread) includes:
 - **Root Cause** — specific process/service causing the issue, with chain-specific context
 - **Severity Assessment** — urgency level with reasoning
 - **Remediation Steps** — numbered steps with actual shell commands to fix the issue
+
+### Upgrade Plan Output
+
+Each upgrade plan is written to a Notion page (under the chain's parent page) with:
+- **Pre-Upgrade Steps** — auto-executed via SSM, results captured in Notion
+- **Upgrade Steps** — listed with shell commands; must be run manually by an engineer
+- **Post-Upgrade Verification** — triggered via Teams button after manual steps complete
+- **Rollback Steps** — recovery procedure if the upgrade fails
 
 ### Chain-Specific Knowledge
 
@@ -295,20 +327,31 @@ Alert cards and RCA replies are posted via Azure Bot Framework API, enabling:
 ### Deployment
 
 ```bash
-# Deploy RCA Lambda (includes teams-notifier updates)
+# Deploy all Lambda functions (RCA + upgrade-analyzer + bot-endpoint + notifier updates)
 ./scripts/deploy-rca-lambda.sh
 
 # Or via the master deploy script
 ./scripts/deploy.sh --rca-only
 ```
 
-### Environment Variables (RCA)
+### Running Tests Locally
+
+```bash
+pip install pytest
+python3 -m pytest tests/ -v
+```
+
+Tests cover button grouping logic, payload routing, Notion block structure, card builders, SSM delegation, and Notion search/create helpers — all without requiring AWS credentials.
+
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key |
+| `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key (also contains `github_token`) |
 | `AMP_WORKSPACE_ID` | Yes | Amazon Managed Prometheus workspace ID |
 | `TEAMS_BOT_SECRET_ARN` | Yes | Secrets Manager ARN for Azure Bot credentials |
+| `NOTION_SECRET_ARN` | Recommended | Secrets Manager ARN for Notion API token (upgrade plan pages) |
+| `SSM_REGION` | Auto | AWS region for SSM commands (set by deploy script) |
 | `RCA_LAMBDA_FUNCTION_NAME` | Auto | Set automatically by deploy script |
 
 ### Lambda Architecture
@@ -318,6 +361,7 @@ Alert cards and RCA replies are posted via Azure Bot Framework API, enabling:
 | **teams-notifier** | 128MB | 60s | Posts alert cards via Bot Framework, sends email |
 | **bot-endpoint** | 128MB | 30s | Handles Action.Submit button clicks from Teams |
 | **rca-analyzer** | 256MB | 180s | SSM diagnostics + Claude analysis + thread reply |
+| **upgrade-analyzer** | 256MB | 300s | GitHub releases + Claude plan + SSM pre-upgrade + Notion + Teams reply |
 | **docs-fetcher** | 256MB | 300s | Fetches chain docs → S3 + Notion (weekly) |
 
 ## Conventions

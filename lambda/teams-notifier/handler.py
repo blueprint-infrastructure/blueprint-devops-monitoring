@@ -325,6 +325,8 @@ def build_adaptive_card_content(alert_data, unique_alerts):
             "weight": "Bolder",
         })
 
+        upgrade_groups = {}  # key: (chain, current_ver, latest_ver)
+
         for alert in unique_alerts:
             labels = alert.get("labels", {})
             annotations = alert.get("annotations", {})
@@ -360,18 +362,19 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                     },
                 }]
                 if is_version_drift:
-                    instance_actions.append({
-                        "type": "Action.Submit",
-                        "title": "\U0001f4cb Upgrade Plan",
-                        "data": {
-                            "action_type": "upgrade_plan",
-                            "alertname": alertname_label,
-                            "instance": instance,
-                            "instance_id": instance_id,
+                    current_ver = labels.get("version", labels.get("client_version", ""))
+                    latest_ver = labels.get("latest_version", "")
+                    key = (chain, current_ver, latest_ver)
+                    if key not in upgrade_groups:
+                        upgrade_groups[key] = {
                             "chain": chain,
+                            "current_ver": current_ver,
+                            "latest_ver": latest_ver,
+                            "alertname": alertname_label,
                             "labels": labels,
-                        },
-                    })
+                            "instances": [],
+                        }
+                    upgrade_groups[key]["instances"].append({"name": instance, "id": instance_id})
 
                 body.append({
                     "type": "ColumnSet",
@@ -402,6 +405,27 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                     "text": f"- {chain_prefix}**{instance}**",
                     "wrap": True,
                 })
+
+        # Add one grouped upgrade plan button per (chain, current_ver, latest_ver)
+        for (chain_key, current_ver, latest_ver), group in upgrade_groups.items():
+            ver_str = f" {current_ver}\u2192{latest_ver}" if (current_ver or latest_ver) else ""
+            btn_title = f"\U0001f4cb {group['chain'].capitalize()} Upgrade Plan{ver_str}"
+            body.append({
+                "type": "ActionSet",
+                "actions": [{
+                    "type": "Action.Submit",
+                    "title": btn_title,
+                    "data": {
+                        "action_type": "analyze_upgrade",
+                        "alertname": group["alertname"],
+                        "chain": group["chain"],
+                        "current_ver": current_ver,
+                        "latest_ver": latest_ver,
+                        "labels": group["labels"],
+                        "instances": group["instances"],
+                    },
+                }],
+            })
 
     return _make_card_content(body)
 

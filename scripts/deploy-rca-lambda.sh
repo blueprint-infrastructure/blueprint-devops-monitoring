@@ -448,12 +448,16 @@ if [ -f "$UPGRADE_SRC" ]; then
         --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
         --arg amp_workspace "${AMP_WORKSPACE_ID}" \
         --arg amp_region "${AMP_REGION}" \
+        --arg notion_secret "${NOTION_SECRET_ARN:-}" \
+        --arg ssm_region "${AMG_REGION}" \
         '{
             Variables: {
                 ANTHROPIC_SECRET_ARN: $anthropic_secret,
                 TEAMS_BOT_SECRET_ARN: $bot_secret,
                 AMP_WORKSPACE_ID: $amp_workspace,
-                AMP_REGION: $amp_region
+                AMP_REGION: $amp_region,
+                NOTION_SECRET_ARN: $notion_secret,
+                SSM_REGION: $ssm_region
             }
         }')
 
