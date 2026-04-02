@@ -423,6 +423,118 @@ else
 fi
 
 # =============================================================================
+# Step 5: upgrade-analyzer Lambda
+# =============================================================================
+
+UPGRADE_FUNCTION_NAME="staking-alert-upgrade-analyzer"
+UPGRADE_SRC="${REPO_ROOT}/lambda/upgrade-analyzer/handler.py"
+
+echo ""
+echo "Deploying upgrade-analyzer Lambda..."
+
+if [ -f "$UPGRADE_SRC" ]; then
+    UPGRADE_TMPDIR=$(mktemp -d)
+    cp "$UPGRADE_SRC" "$UPGRADE_TMPDIR/"
+    (cd "$UPGRADE_TMPDIR" && zip -qr function.zip handler.py)
+
+    # Reuse the existing RCA IAM role (already has AMP + Secrets Manager permissions)
+    EXISTING_ROLE_ARN=$(aws iam get-role \
+        --role-name "$RCA_ROLE_NAME" \
+        --query 'Role.Arn' \
+        --output text 2>/dev/null || echo "")
+
+    UPGRADE_ENV=$(jq -n \
+        --arg anthropic_secret "${ANTHROPIC_SECRET_ARN}" \
+        --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
+        --arg amp_workspace "${AMP_WORKSPACE_ID}" \
+        --arg amp_region "${AMP_REGION}" \
+        '{
+            Variables: {
+                ANTHROPIC_SECRET_ARN: $anthropic_secret,
+                TEAMS_BOT_SECRET_ARN: $bot_secret,
+                AMP_WORKSPACE_ID: $amp_workspace,
+                AMP_REGION: $amp_region
+            }
+        }')
+
+    if aws lambda get-function --function-name "$UPGRADE_FUNCTION_NAME" \
+            --region "$AMG_REGION" &>/dev/null; then
+        aws lambda update-function-code \
+            --function-name "$UPGRADE_FUNCTION_NAME" \
+            --zip-file "fileb://${UPGRADE_TMPDIR}/function.zip" \
+            --region "$AMG_REGION" \
+            --output text --query 'FunctionArn' >/dev/null 2>&1
+
+        aws lambda wait function-updated \
+            --function-name "$UPGRADE_FUNCTION_NAME" \
+            --region "$AMG_REGION" 2>/dev/null || sleep 5
+
+        aws lambda update-function-configuration \
+            --function-name "$UPGRADE_FUNCTION_NAME" \
+            --environment "$UPGRADE_ENV" \
+            --timeout 120 \
+            --memory-size 256 \
+            --region "$AMG_REGION" \
+            --output text --query 'FunctionArn' >/dev/null 2>&1
+
+        echo -e "  ${GREEN}✓ Updated: ${UPGRADE_FUNCTION_NAME}${NC}"
+    else
+        if [ -n "$EXISTING_ROLE_ARN" ] && [ "$EXISTING_ROLE_ARN" != "None" ]; then
+            UPGRADE_ARN=$(aws lambda create-function \
+                --function-name "$UPGRADE_FUNCTION_NAME" \
+                --runtime python3.12 \
+                --handler handler.lambda_handler \
+                --role "$EXISTING_ROLE_ARN" \
+                --zip-file "fileb://${UPGRADE_TMPDIR}/function.zip" \
+                --timeout 120 \
+                --memory-size 256 \
+                --environment "$UPGRADE_ENV" \
+                --region "$AMG_REGION" \
+                --query 'FunctionArn' \
+                --output text 2>/dev/null || echo "")
+
+            if [ -n "$UPGRADE_ARN" ] && [ "$UPGRADE_ARN" != "None" ]; then
+                echo -e "  ${GREEN}✓ Created: ${UPGRADE_FUNCTION_NAME}${NC}"
+            else
+                echo -e "  ${RED}✗ Failed to create ${UPGRADE_FUNCTION_NAME}${NC}"
+            fi
+        else
+            echo -e "  ${RED}✗ IAM role not found: ${RCA_ROLE_NAME}${NC}"
+        fi
+    fi
+
+    # Add UPGRADE_LAMBDA_FUNCTION_NAME to bot-endpoint env vars
+    echo -e "  Updating bot-endpoint: adding UPGRADE_LAMBDA_FUNCTION_NAME..."
+    CURRENT_BOT_ENV=$(aws lambda get-function-configuration \
+        --function-name "$BOT_FUNCTION_NAME" \
+        --region "$AMG_REGION" \
+        --query 'Environment.Variables' \
+        --output json 2>/dev/null || echo "{}")
+
+    UPDATED_BOT_ENV=$(echo "$CURRENT_BOT_ENV" | jq \
+        --arg k "UPGRADE_LAMBDA_FUNCTION_NAME" --arg v "$UPGRADE_FUNCTION_NAME" \
+        '. + {($k): $v}')
+
+    aws lambda wait function-updated \
+        --function-name "$BOT_FUNCTION_NAME" \
+        --region "$AMG_REGION" 2>/dev/null || sleep 3
+
+    if aws lambda update-function-configuration \
+        --function-name "$BOT_FUNCTION_NAME" \
+        --environment "{\"Variables\": $UPDATED_BOT_ENV}" \
+        --region "$AMG_REGION" \
+        --output text --query 'FunctionArn' >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ bot-endpoint: UPGRADE_LAMBDA_FUNCTION_NAME=${UPGRADE_FUNCTION_NAME}${NC}"
+    else
+        echo -e "  ${YELLOW}⚠ Could not update bot-endpoint config${NC}"
+    fi
+
+    rm -rf "$UPGRADE_TMPDIR"
+else
+    echo -e "  ${YELLOW}⚠ Upgrade analyzer source not found: ${UPGRADE_SRC}${NC}"
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 
@@ -432,6 +544,7 @@ echo "RCA Lambda Deployment Summary"
 echo "=================================================="
 echo -e "${GREEN}✓ RCA Lambda:     ${RCA_FUNCTION_NAME} (256MB, 180s timeout)${NC}"
 echo -e "${GREEN}✓ Bot Endpoint:   ${BOT_FUNCTION_NAME}${NC}"
+echo -e "${GREEN}✓ Upgrade Analyzer: ${UPGRADE_FUNCTION_NAME} (256MB, 120s timeout)${NC}"
 echo -e "${GREEN}✓ IAM Role:       ${RCA_ROLE_NAME}${NC}"
 echo -e "${GREEN}✓ Notifier:       ${NOTIFIER_FUNCTION_NAME} (updated with RCA trigger)${NC}"
 echo ""
