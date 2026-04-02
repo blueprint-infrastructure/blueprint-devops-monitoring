@@ -48,7 +48,7 @@ _bot_token = None
 _bot_token_expires = 0
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_MAX_TOKENS = 2048
+CLAUDE_MAX_TOKENS = 4096
 
 # =============================================================================
 # Chain Configuration
