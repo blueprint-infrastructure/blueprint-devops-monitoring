@@ -72,7 +72,7 @@ def lambda_handler(event, context):
 
     activity_type = activity.get("type", "")
     logger.info("Received activity: type=%s, keys=%s", activity_type, list(activity.keys()))
-    logger.info("Activity body (first 1000): %s", json.dumps(activity)[:1000])
+    logger.info("Activity body (first 2000): %s", json.dumps(activity)[:2000])
 
     # Handle invoke activities (Action.Execute button clicks)
     if activity_type == "invoke":
@@ -81,12 +81,19 @@ def lambda_handler(event, context):
     # Handle message activities - Action.Submit sends as message type with value field
     if activity_type == "message":
         value = activity.get("value", {})
+        # Teams sometimes sends value as a JSON string instead of a parsed dict
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                value = {}
+        logger.info("Message value: %s", json.dumps(value)[:500])
         if isinstance(value, dict):
             action_type = value.get("action_type", "")
             if action_type == "trigger_rca":
                 logger.info("Action.Submit detected in message activity")
                 return trigger_rca_from_button(activity, value)
-            elif action_type == "upgrade_plan":
+            elif action_type in ("upgrade_plan", "analyze_upgrade"):
                 logger.info("Upgrade plan Action.Submit detected in message activity")
                 return trigger_upgrade_plan_from_button(activity, value)
         return {"statusCode": 200, "body": ""}
@@ -108,7 +115,7 @@ def handle_invoke(activity):
     if action_type == "trigger_rca":
         return trigger_rca_from_button(activity, data)
 
-    elif action_type == "upgrade_plan":
+    elif action_type in ("upgrade_plan", "analyze_upgrade"):
         return trigger_upgrade_plan_from_button(activity, data)
 
     logger.warning("Unknown action_type: %s", action_type)
@@ -180,18 +187,31 @@ def trigger_upgrade_plan_from_button(activity, data):
         if ";messageid=" in conv_id:
             reply_to_id = conv_id.split(";messageid=")[-1]
 
-    instance_name = data.get("instance", "")
+    # Support both field naming conventions:
+    #   new: instance, alertname, labels
+    #   old: validator_name, client_version, latest_version
+    instance_name = data.get("instance") or data.get("validator_name", "")
     instance_id = data.get("instance_id", "")
+
+    # Merge version info into labels so upgrade-analyzer can skip AMP queries
+    labels = dict(data.get("labels", {}))
+    if data.get("client_version"):
+        labels["version"] = data["client_version"]
+    if data.get("latest_version"):
+        labels["latest_version"] = data["latest_version"]
+
+    chain = data.get("chain", "")
+    alertname = data.get("alertname", "") or f"{chain.capitalize()}VersionDrift"
 
     logger.info("Upgrade plan button clicked: instance=%s(%s), parent_msg=%s",
                 instance_name, instance_id, reply_to_id)
 
     payload = {
-        "alertname":         data.get("alertname", ""),
+        "alertname":         alertname,
         "instance":          instance_name,
         "instance_id":       instance_id,
-        "chain":             data.get("chain", ""),
-        "labels":            data.get("labels", {}),
+        "chain":             chain,
+        "labels":            labels,
         "parent_message_id": reply_to_id,
         "service_url":       activity.get("serviceUrl", ""),
         "channel_id":        conversation.get("id", "").split(";")[0],

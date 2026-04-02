@@ -56,6 +56,14 @@ CLAUDE_MAX_TOKENS = 2048
 
 VALIDATOR_CONTEXT_REPO = "blueprint-infrastructure/validator-context"
 
+# Normalize chain aliases sent by teams-notifier (e.g. "avax" → "avalanche")
+CHAIN_ALIASES = {
+    "avax":      "avalanche",
+    "eth":       "ethereum",
+    "algo":      "algorand",
+    "cc":        "audius",
+}
+
 CHAIN_REPOS = {
     "avalanche": ["ava-labs/avalanchego"],
     "solana":    ["anza-xyz/agave"],
@@ -767,7 +775,7 @@ def lambda_handler(event, context):
     alertname   = event.get("alertname", "")
     instance    = event.get("instance", "")
     instance_id = event.get("instance_id", "")
-    chain       = event.get("chain", "").lower()
+    chain       = CHAIN_ALIASES.get(event.get("chain", "").lower(), event.get("chain", "").lower())
     labels      = event.get("labels", {})
     parent_msg  = event.get("parent_message_id", "")
     service_url = event.get("service_url", "")
