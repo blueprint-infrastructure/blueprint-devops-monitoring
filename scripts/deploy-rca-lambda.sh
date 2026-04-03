@@ -146,7 +146,7 @@ RCA_POLICY=$(jq -n \
         {
             Sid: "SSMCommands",
             Effect: "Allow",
-            Action: ["ssm:SendCommand", "ssm:GetCommandInvocation"],
+            Action: ["ssm:SendCommand", "ssm:GetCommandInvocation", "ssm:DescribeInstanceInformation"],
             Resource: [
                 "arn:aws:ssm:*:*:document/AWS-RunShellScript",
                 "arn:aws:ec2:*:*:instance/*",
@@ -435,7 +435,8 @@ echo "Deploying upgrade-analyzer Lambda..."
 if [ -f "$UPGRADE_SRC" ]; then
     UPGRADE_TMPDIR=$(mktemp -d)
     cp "$UPGRADE_SRC" "$UPGRADE_TMPDIR/"
-    (cd "$UPGRADE_TMPDIR" && zip -qr function.zip handler.py)
+    pip install requests curl_cffi -q -t "$UPGRADE_TMPDIR/" 2>/dev/null
+    (cd "$UPGRADE_TMPDIR" && zip -qr function.zip .)
 
     # Reuse the existing RCA IAM role (already has AMP + Secrets Manager permissions)
     EXISTING_ROLE_ARN=$(aws iam get-role \
@@ -448,12 +449,18 @@ if [ -f "$UPGRADE_SRC" ]; then
         --arg bot_secret "${TEAMS_BOT_SECRET_ARN:-}" \
         --arg amp_workspace "${AMP_WORKSPACE_ID}" \
         --arg amp_region "${AMP_REGION}" \
+        --arg notion_secret "${NOTION_SECRET_ARN:-}" \
+        --arg github_secret "${GITHUB_SECRET_ARN:-}" \
+        --arg ssm_region "${AMG_REGION}" \
         '{
             Variables: {
                 ANTHROPIC_SECRET_ARN: $anthropic_secret,
                 TEAMS_BOT_SECRET_ARN: $bot_secret,
                 AMP_WORKSPACE_ID: $amp_workspace,
-                AMP_REGION: $amp_region
+                AMP_REGION: $amp_region,
+                NOTION_SECRET_ARN: $notion_secret,
+                GITHUB_SECRET_ARN: $github_secret,
+                SSM_REGION: $ssm_region
             }
         }')
 
@@ -472,7 +479,7 @@ if [ -f "$UPGRADE_SRC" ]; then
         aws lambda update-function-configuration \
             --function-name "$UPGRADE_FUNCTION_NAME" \
             --environment "$UPGRADE_ENV" \
-            --timeout 120 \
+            --timeout 300 \
             --memory-size 256 \
             --region "$AMG_REGION" \
             --output text --query 'FunctionArn' >/dev/null 2>&1
@@ -486,7 +493,7 @@ if [ -f "$UPGRADE_SRC" ]; then
                 --handler handler.lambda_handler \
                 --role "$EXISTING_ROLE_ARN" \
                 --zip-file "fileb://${UPGRADE_TMPDIR}/function.zip" \
-                --timeout 120 \
+                --timeout 300 \
                 --memory-size 256 \
                 --environment "$UPGRADE_ENV" \
                 --region "$AMG_REGION" \

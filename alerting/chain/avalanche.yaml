@@ -69,6 +69,17 @@ groups:
       # Peer Connectivity
       # =======================================================================
 
+      - alert: AvalanchePeersDropWithHighStake
+        expr: avalanche_network_peers < 3000 and avalanche_platformvm_local_staked / 1e9 > 2000
+        for: 5m
+        labels:
+          severity: high
+          chain: avalanche
+        annotations:
+          summary: "Avalanche peers dropped to {{ $values.A.Value }} with stake above 2000 AVAX on {{ $labels.instance }}"
+          description: "Avalanche node peers dropped below 3000 while local stake is above 2000 AVAX on {{ $labels.instance }} — potential network issue affecting a high-stake validator"
+          runbook_url: "https://github.com/blueprint-infrastructure/blueprint-devops-monitoring/blob/main/runbooks/avalanche-stake-low.md"
+
       - alert: AvalancheLowPeers
         expr: avalanche_network_peers < 10
         for: 10m

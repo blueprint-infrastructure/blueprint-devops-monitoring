@@ -58,8 +58,14 @@ monitoring/
 │   │   └── handler.py
 │   ├── bot-endpoint/        # Bot messaging endpoint (handles button clicks)
 │   │   └── handler.py
+│   ├── upgrade-analyzer/    # Version upgrade plan generator (Claude + GitHub + SSM)
+│   │   └── handler.py
 │   └── docs-fetcher/        # Chain knowledge fetcher (GitHub + docs → S3 + Notion)
 │       └── handler.py
+├── tests/                   # Unit tests (run locally before deploy)
+│   ├── test_teams_notifier.py
+│   ├── test_bot_endpoint.py
+│   └── test_upgrade_analyzer.py
 └── scripts/                 # Deployment scripts
     ├── validate.sh          # Local validation script
     ├── deploy.sh            # Master deployment script
@@ -68,6 +74,7 @@ monitoring/
     ├── deploy-notifications-amg.sh # Deploy contact points and policies
     ├── deploy-sns-lambda.sh        # Deploy SNS topics + teams-notifier Lambda
     ├── deploy-rca-lambda.sh        # Deploy RCA analyzer Lambda
+    ├── setup-vpc-lambda.sh         # Migrate Lambdas to VPC with NAT Gateway
     └── env.example          # Environment variable template
 ```
 
@@ -104,7 +111,7 @@ monitoring/
 
 **Solana** (alerting/chain/solana.yaml) — 9 rules covering node health, sync status (slots behind), peer connectivity, validator delinquency, and version drift.
 
-**Avalanche** (alerting/chain/avalanche.yaml) — 10 rules covering node health, C-Chain bootstrapping/sync, peer connectivity, rewarding stake percentage, and version drift.
+**Avalanche** (alerting/chain/avalanche.yaml) — 11 rules covering node health, C-Chain bootstrapping/sync, peer connectivity, rewarding stake percentage, high-stake peer drop detection, and version drift.
 
 **Algorand** (alerting/chain/algorand.yaml) — 7 rules covering node health/readiness, sync status (rounds behind), peer connectivity, and version drift.
 
@@ -221,24 +228,40 @@ aws s3 cp agents/install-<chain>-monitoring.sh s3://blueprint-infra-devops/agent
 
 Each script installs three components: node_exporter (system metrics), a chain-specific collector (business metrics), and Grafana Agent (pushes to AMP via SigV4).
 
-## Automated Root Cause Analysis (RCA)
+## Automated Root Cause Analysis (RCA) and Upgrade Planning
 
-On-demand root cause analysis triggered via card buttons in Teams. Uses SSM + AMP metrics + Claude AI with chain-specific knowledge.
+On-demand root cause analysis and upgrade plan generation triggered via card buttons in Teams. Uses SSM + AMP metrics + Claude AI with chain-specific knowledge.
 
 ### How It Works
 
 ```
 AMG Alert → SNS → teams-notifier Lambda → Bot Framework API → Teams Adaptive Card
-                                                                (with "🔍 Analyze" buttons per instance)
+                                                                (with "🔍 Analyze" per instance,
+                                                                 "📋 {Chain} Upgrade Plan" per version group)
                                         → SES Email (critical only)
 
-User clicks button → Teams → bot-endpoint Lambda (API Gateway)
-                               → rca-analyzer Lambda (async)
-                                     ├→ Claude API: generate diagnostic commands (chain-aware)
-                                     ├→ SSM: execute commands on the machine
-                                     ├→ AMP: query historical metric trends
-                                     ├→ Claude API: analyze root cause
-                                     └→ Bot Framework: reply-in-thread with diagnosis
+User clicks "🔍 Analyze" → bot-endpoint → rca-analyzer Lambda (async)
+    ├→ Claude API: generate diagnostic commands (chain-aware)
+    ├→ SSM: execute commands on the machine
+    ├→ AMP: query historical metric trends
+    ├→ Claude API: analyze root cause
+    └→ Bot Framework: reply-in-thread with diagnosis card
+
+User clicks "📋 {Chain} Upgrade Plan" → bot-endpoint → upgrade-analyzer Lambda (async)
+    ├→ GitHub: fetch release notes for version range (both repos for Ethereum)
+    ├→ validator-context: fetch internal upgrade guide + scripts
+    ├→ Claude API: generate structured JSON upgrade plan
+    ├→ SSM: auto-run pre-upgrade steps on each affected instance (multi-region)
+    ├→ Claude API: analyze pre-upgrade results → per-node readiness assessment
+    ├→ GitHub: push upgrade plan as Markdown to validator-context repo
+    │    └── {chain}/upgrade_plan/{version}.md
+    └→ Bot Framework: reply-in-thread with short card
+         ├── "📄 View Upgrade Plan" → GitHub link
+         └── "✅ Run Post-Upgrade Verification" button
+
+Engineer completes manual upgrade, clicks verify button → bot-endpoint → upgrade-analyzer (async)
+    ├→ SSM: run post-upgrade verification on each instance
+    └→ Bot Framework: reply-in-thread with verification summary
 ```
 
 ### RCA Output
@@ -248,6 +271,16 @@ Each RCA reply (in the alert message's thread) includes:
 - **Severity Assessment** — urgency level with reasoning
 - **Remediation Steps** — numbered steps with actual shell commands to fix the issue
 
+### Upgrade Plan Output
+
+Each upgrade plan is pushed as Markdown to the [`validator-context`](https://github.com/blueprint-infrastructure/validator-context) repo under `{chain}/upgrade_plan/`:
+- **Release Notes** — links to GitHub releases for all relevant repos (e.g., both Besu + Teku for Ethereum)
+- **Pre-Upgrade Steps** — auto-executed via SSM on each instance (multi-region), results captured
+- **Upgrade Readiness Assessment** — Claude analyzes SSM results per-node (✅ Ready / ⚠️ Caution / ❌ Not ready)
+- **Upgrade Steps** — listed with shell commands; must be run manually by an engineer
+- **Post-Upgrade Verification** — triggered via Teams button after manual steps complete
+- **Rollback Steps** — recovery procedure if the upgrade fails
+
 ### Chain-Specific Knowledge
 
 RCA prompts include per-chain architecture, diagnostic commands, failure modes, and thresholds for:
@@ -255,7 +288,7 @@ RCA prompts include per-chain architecture, diagnostic commands, failure modes, 
 - **Ethereum** — Besu (execution) + Teku (consensus), dual-layer sync, attestations
 - **Avalanche** — AvalancheGo, P/X/C-Chain bootstrap, rewarding stake (80% threshold)
 - **Algorand** — algod, participation key expiry, round sync
-- **Audius** — Docker-based (my-node), watchtower auto-updates, CPU 100% is normal
+- **Audius** — Docker-based (`docker run`, not compose), openaudio/go-openaudio image, CPU 100% is normal
 
 Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetcher` Lambda, stored in S3 and [Notion](https://www.notion.so/32f09a37-0ee0-8154-9efd-cb49c3acd4dc).
 
@@ -266,7 +299,7 @@ Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetc
 | Chain | Repos |
 |---|---|
 | Solana | `anza-xyz/agave`, `firedancer-io/firedancer` |
-| Ethereum | `hyperledger/besu`, `Consensys/teku` |
+| Ethereum | `besu-eth/besu`, `Consensys/teku` |
 | Avalanche | `ava-labs/avalanchego` |
 | Algorand | `algorand/go-algorand` |
 | Audius | `AudiusProject/audius-protocol`, `OpenAudio/go-openaudio` |
@@ -295,20 +328,32 @@ Alert cards and RCA replies are posted via Azure Bot Framework API, enabling:
 ### Deployment
 
 ```bash
-# Deploy RCA Lambda (includes teams-notifier updates)
+# Deploy all Lambda functions (RCA + upgrade-analyzer + bot-endpoint + notifier updates)
 ./scripts/deploy-rca-lambda.sh
 
 # Or via the master deploy script
 ./scripts/deploy.sh --rca-only
 ```
 
-### Environment Variables (RCA)
+### Running Tests Locally
+
+```bash
+pip install pytest
+python3 -m pytest tests/ -v
+```
+
+Tests cover button grouping logic, payload routing, card builders, SSM delegation, and GitHub push helpers — all without requiring AWS credentials.
+
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key |
+| `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key (also contains `github_token`) |
 | `AMP_WORKSPACE_ID` | Yes | Amazon Managed Prometheus workspace ID |
 | `TEAMS_BOT_SECRET_ARN` | Yes | Secrets Manager ARN for Azure Bot credentials |
+| `GITHUB_SECRET_ARN` | Recommended | Secrets Manager ARN for GitHub token (push upgrade plans to validator-context) |
+| `NOTION_SECRET_ARN` | Optional | Secrets Manager ARN for Notion API token (legacy, replaced by GitHub push) |
+| `SSM_REGION` | Auto | Default AWS region for SSM commands (auto-discovers per instance) |
 | `RCA_LAMBDA_FUNCTION_NAME` | Auto | Set automatically by deploy script |
 
 ### Lambda Architecture
@@ -318,6 +363,7 @@ Alert cards and RCA replies are posted via Azure Bot Framework API, enabling:
 | **teams-notifier** | 128MB | 60s | Posts alert cards via Bot Framework, sends email |
 | **bot-endpoint** | 128MB | 30s | Handles Action.Submit button clicks from Teams |
 | **rca-analyzer** | 256MB | 180s | SSM diagnostics + Claude analysis + thread reply |
+| **upgrade-analyzer** | 256MB | 300s | Release notes + Claude plan + SSM pre-upgrade + readiness analysis + GitHub push + Teams reply |
 | **docs-fetcher** | 256MB | 300s | Fetches chain docs → S3 + Notion (weekly) |
 
 ## Conventions

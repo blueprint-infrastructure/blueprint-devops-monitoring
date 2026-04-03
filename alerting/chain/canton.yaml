@@ -13,10 +13,8 @@ groups:
           severity: warning
           chain: canton
         annotations:
-          summary: "Canton has {{ $value }} unhealthy container(s) on {{ $labels.instance }}"
-          description: >
-            {{ $value }} Docker container(s) on {{ $labels.instance }} have health status = unhealthy
-            for more than 5 minutes. Run `docker ps` and `docker inspect <container>` to investigate.
+          summary: "Canton has unhealthy container(s) on {{ $labels.instance }}"
+          description: "Docker container(s) on {{ $labels.instance }} have health status unhealthy for more than 5 minutes. Run docker ps and docker inspect to investigate."
           runbook_url: ""
 
       - alert: CantonContainersCritical
