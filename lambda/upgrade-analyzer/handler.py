@@ -76,7 +76,7 @@ CHAIN_ALIASES = {
 
 CHAIN_REPOS = {
     "avalanche": ["ava-labs/avalanchego"],
-    "solana":    ["anza-xyz/agave"],
+    "solana":    ["anza-xyz/agave", "firedancer-io/firedancer"],
     "algorand":  ["algorand/go-algorand"],
     "ethereum":  ["besu-eth/besu", "Consensys/teku"],  # filtered by alertname
     "audius":    ["AudiusProject/audius-protocol"],
@@ -220,7 +220,7 @@ def _get_versions(chain, instance, labels, alertname="", current_ver_hint="", la
             logger.warning("AMP version query failed: %s", e)
 
     # Try 3: GitHub latest release as fallback for latest_ver
-    repos = _get_repos_for_chain(chain, alertname, single=True)
+    repos = _get_repos_for_chain(chain, alertname, single=True, version_hint=latest_ver_hint)
     if not latest_ver and repos:
         try:
             latest_ver = _get_latest_tag(repos[0])
@@ -279,19 +279,27 @@ def _query_amp_version_label(workspace_id, region, metric_name, instance):
 # Phase 2: GitHub Release Notes
 # =============================================================================
 
-def _get_repos_for_chain(chain, alertname="", single=False):
+def _get_repos_for_chain(chain, alertname="", single=False, version_hint=""):
     """Return the list of GitHub repos for this chain/alertname.
 
     For ethereum, returns BOTH besu and teku repos by default (needed for
     release notes and upgrade plans). Pass single=True to filter to just
     the repo matching the alertname (used for version discovery fallback).
+    For solana, always filters to Agave or Firedancer based on alertname/version.
     """
     repos = CHAIN_REPOS.get(chain, [])
+    hint = f"{alertname} {version_hint}".lower()
     if single and chain == "ethereum" and len(repos) == 2:
-        if "Teku" in alertname:
+        if "teku" in hint:
             return [r for r in repos if "teku" in r.lower()]
         else:
             return [r for r in repos if "besu" in r.lower()]
+    # Solana: each node runs Agave OR Firedancer, not both
+    if chain == "solana" and len(repos) == 2:
+        if "firedancer" in hint:
+            return [r for r in repos if "firedancer" in r.lower()]
+        else:
+            return [r for r in repos if "agave" in r.lower()]
     return repos
 
 
@@ -785,7 +793,7 @@ def _notion_link_paragraph(text, url):
 
 def _release_notes_urls(chain, latest_ver, alertname=""):
     """Build GitHub release URLs for the target version."""
-    repos = _get_repos_for_chain(chain, alertname)
+    repos = _get_repos_for_chain(chain, alertname, version_hint=latest_ver)
     urls = []
     for repo in repos:
         tag = _extract_version_tag(repo, latest_ver)
@@ -1703,7 +1711,7 @@ def _handle_upgrade_plan(event):
     logger.info("Versions: %s → %s", current_ver, latest_ver)
 
     # ── Phase 2: GitHub release notes + internal validator-context docs ──────
-    repos = _get_repos_for_chain(chain, alertname)
+    repos = _get_repos_for_chain(chain, alertname, version_hint=latest_ver)
     release_notes_parts = []
     for repo in repos:
         # Extract the repo-specific version from compound strings like "Besu 26.2.0 / Teku 26.3.0"
