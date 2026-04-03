@@ -78,7 +78,7 @@ CHAIN_REPOS = {
     "avalanche": ["ava-labs/avalanchego"],
     "solana":    ["anza-xyz/agave"],
     "algorand":  ["algorand/go-algorand"],
-    "ethereum":  ["hyperledger/besu", "Consensys/teku"],  # filtered by alertname
+    "ethereum":  ["besu-eth/besu", "Consensys/teku"],  # filtered by alertname
     "audius":    ["AudiusProject/audius-protocol"],
     "canton":    [],
 }
@@ -96,10 +96,11 @@ VERSION_METRICS = {
 CHAIN_UPGRADE_CONTEXT = {
     "avalanche": (
         "Service: avalanchego (systemctl). "
-        "Config dir: ~/.avalanchego/. "
+        "IMPORTANT: Default user is ubuntu, NOT root. SSM runs as root, so use absolute paths. "
+        "Config dir: /home/ubuntu/.avalanchego/ (NOT ~/.avalanchego — that resolves to /root which is wrong). "
         "Binary: /usr/local/bin/avalanchego. "
-        "Restart: systemctl restart avalanchego. "
-        "Verify: avalanchego --version && curl -s -X POST --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}' -H 'content-type:application/json;' http://127.0.0.1:9650/ext/info"
+        "Restart: sudo systemctl restart avalanchego. "
+        "Verify: /usr/local/bin/avalanchego --version && curl -s -X POST --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}' -H 'content-type:application/json;' http://127.0.0.1:9650/ext/info"
     ),
     "solana": (
         "Service: sol (systemctl) or agave-validator. "
@@ -122,12 +123,21 @@ CHAIN_UPGRADE_CONTEXT = {
         "Verify: curl -s http://localhost:5051/eth/v1/node/syncing; curl -s http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_syncing\",\"params\":[],\"id\":1}'"
     ),
     "audius": (
-        "Deployed via docker-compose + optional watchtower auto-upgrade. "
-        "IMPORTANT: docker-compose.yml is NOT in the default shell working directory. "
-        "Always find it first: COMPOSE_DIR=$(find /home /root /opt -name 'docker-compose.yml' -maxdepth 6 2>/dev/null | grep -v backup | head -1 | xargs dirname 2>/dev/null); echo \"Compose dir: $COMPOSE_DIR\". "
-        "All docker compose commands must be prefixed with: cd $COMPOSE_DIR && "
-        "Manual upgrade: cd $COMPOSE_DIR && docker compose pull && docker compose up -d. "
-        "Verify: cd $COMPOSE_DIR && docker compose ps; curl -s http://localhost/health_check | python3 -m json.tool 2>/dev/null || curl -s http://localhost/health_check."
+        "Deployed via direct 'docker run' (NOT docker-compose). "
+        "Container name: my-node. Image: openaudio/go-openaudio:stable. "
+        "Data volume: /root/openaudio-prod-data:/data. Ports: 80, 443, 26656. "
+        "Restart policy: unless-stopped. "
+        "Pre-upgrade checks: docker ps; docker inspect my-node --format '{{.Config.Image}}'; curl -s http://localhost/health_check. "
+        "Upgrade steps: 1) docker pull openaudio/go-openaudio:stable, "
+        "2) Save current container config: docker inspect my-node > /tmp/my-node-backup.json, "
+        "3) docker stop my-node && docker rm my-node, "
+        "4) Recreate with same env vars and mounts: docker run -d --name my-node --restart unless-stopped "
+        "-v /root/openaudio-prod-data:/data -p 80:80 -p 443:443 -p 26656:26656 "
+        "$(docker inspect my-node 2>/dev/null | python3 -c \"import json,sys; c=json.load(sys.stdin)[0]; print(' '.join(f'-e {e.split(\\\"=\\\",1)[0]}=...' for e in c['Config']['Env'] if 'PATH' not in e.split('=',1)[0]))\" 2>/dev/null) "
+        "openaudio/go-openaudio:stable. "
+        "IMPORTANT: Container env vars include PRIVATE KEYS — NEVER log, print, or include them in any output, plan, or documentation. "
+        "Use 'docker inspect my-node' to get the full run command for recreation, but redact all private key values. "
+        "Verify: docker ps | grep my-node; curl -s http://localhost/health_check."
     ),
     "canton": (
         "Canton Enterprise node. "
@@ -185,7 +195,7 @@ def _get_versions(chain, instance, labels, alertname="", current_ver_hint="", la
             logger.warning("AMP version query failed: %s", e)
 
     # Try 3: GitHub latest release as fallback for latest_ver
-    repos = _get_repos_for_chain(chain, alertname)
+    repos = _get_repos_for_chain(chain, alertname, single=True)
     if not latest_ver and repos:
         try:
             latest_ver = _get_latest_tag(repos[0])
@@ -244,10 +254,15 @@ def _query_amp_version_label(workspace_id, region, metric_name, instance):
 # Phase 2: GitHub Release Notes
 # =============================================================================
 
-def _get_repos_for_chain(chain, alertname=""):
-    """Return the list of GitHub repos for this chain/alertname."""
+def _get_repos_for_chain(chain, alertname="", single=False):
+    """Return the list of GitHub repos for this chain/alertname.
+
+    For ethereum, returns BOTH besu and teku repos by default (needed for
+    release notes and upgrade plans). Pass single=True to filter to just
+    the repo matching the alertname (used for version discovery fallback).
+    """
     repos = CHAIN_REPOS.get(chain, [])
-    if chain == "ethereum" and len(repos) == 2:
+    if single and chain == "ethereum" and len(repos) == 2:
         if "Teku" in alertname:
             return [r for r in repos if "teku" in r.lower()]
         else:
@@ -418,7 +433,9 @@ Rules:
 - If release notes are unavailable or sparse, still provide a reasonable generic plan.
 - Only include breaking_changes that are explicitly mentioned or clearly implied by the release notes.
 - NEVER assume the current working directory. Always use absolute paths or cd to the correct directory first.
+- SSM runs as root, but the default user on nodes is ubuntu. Use absolute paths like /home/ubuntu/.avalanchego/ instead of ~ or $HOME which resolve to /root.
 - For docker-compose based services, always locate the compose file before running compose commands.
+- NEVER include private keys, secrets, or sensitive credentials in commands, output, or documentation. Redact them as '***'.
 """
 
 
@@ -744,10 +761,42 @@ def _release_notes_urls(chain, latest_ver, alertname=""):
     repos = _get_repos_for_chain(chain, alertname)
     urls = []
     for repo in repos:
-        # Strip leading 'v' from version if repo tags don't use it, keep both possibilities
-        tag = latest_ver.strip()
+        tag = _extract_version_tag(repo, latest_ver)
         urls.append((f"{repo} release: {tag}", f"https://github.com/{repo}/releases/tag/{tag}"))
     return urls
+
+
+def _extract_version_tag(repo, version_str):
+    """Extract the correct release tag for a repo from a possibly compound version string.
+
+    Examples:
+      repo="besu-eth/besu",   version="Besu 26.2.0 / Teku 26.4.0"  → "26.2.0"
+      repo="Consensys/teku",  version="Besu 26.2.0 / Teku 26.4.0"  → "26.4.0"
+      repo="ava-labs/avalanchego", version="AvalancheGo 1.14.2"     → "AvalancheGo 1.14.2"
+    """
+    import re
+    repo_lower = repo.lower()
+    ver = version_str.strip()
+
+    # Handle compound version: "Besu 26.2.0 / Teku 26.4.0"
+    if "/" in ver:
+        parts = [p.strip() for p in ver.split("/")]
+        for part in parts:
+            # Match repo name to version part
+            if "besu" in repo_lower and part.lower().startswith("besu"):
+                return re.sub(r'^[A-Za-z]+\s*', '', part).strip()
+            if "teku" in repo_lower and part.lower().startswith("teku"):
+                return re.sub(r'^[A-Za-z]+\s*', '', part).strip()
+        # No match — return first part stripped of prefix
+        return re.sub(r'^[A-Za-z]+\s*', '', parts[0]).strip()
+
+    # Single version: "Besu 26.2.0" → "26.2.0" for besu-eth/besu
+    if "besu" in repo_lower and ver.lower().startswith("besu"):
+        return re.sub(r'^[A-Za-z]+\s*', '', ver).strip()
+    if "teku" in repo_lower and ver.lower().startswith("teku"):
+        return re.sub(r'^[A-Za-z]+\s*', '', ver).strip()
+
+    return ver
 
 
 def _build_notion_blocks(plan, pre_results, instances, chain, current_ver, latest_ver, alertname=""):
@@ -857,7 +906,7 @@ def _build_notion_blocks(plan, pre_results, instances, chain, current_ver, lates
 GITHUB_REPO = "blueprint-infrastructure/validator-context"
 
 
-def _build_upgrade_plan_markdown(plan, pre_results, instances, chain, current_ver, latest_ver, alertname=""):
+def _build_upgrade_plan_markdown(plan, pre_results, instances, chain, current_ver, latest_ver, alertname="", readiness_analysis=""):
     """Convert an upgrade plan into a Markdown document for GitHub."""
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     instance_names = ", ".join(i["name"] for i in instances) if instances else "—"
@@ -893,47 +942,94 @@ def _build_upgrade_plan_markdown(plan, pre_results, instances, chain, current_ve
         lines.append("None")
     lines.append("")
 
-    # Pre-upgrade steps
+    # Pre-upgrade steps — single code block with comments
     pre_steps = plan.get("pre_upgrade_steps", [])
     if pre_steps:
         lines.append("## Pre-Upgrade Steps (Auto-executed)")
+        code_lines = []
         for s in pre_steps:
-            lines.append(f"### Step {s.get('step', '')}: {s.get('description', '')}")
+            code_lines.append(f"# Step {s.get('step', '')}: {s.get('description', '')}")
             if s.get("command"):
-                lines.append(f"```bash\n{s['command']}\n```")
-            lines.append("")
+                code_lines.append(s["command"])
+            code_lines.append("")
+        lines.append(f"```bash\n{chr(10).join(code_lines).strip()}\n```")
+        lines.append("")
 
-    # SSM execution results
+    # SSM execution results — cleaned up
     if pre_results:
-        lines.append("### Pre-Upgrade Execution Results")
+        lines.append("### Execution Results")
         for r in pre_results:
             inst_name = r.get("instance_name", "unknown")
             output = r.get("output", "(no output)")
+            # Clean up SSM output: convert step markers, strip noise
+            cleaned = []
+            in_stderr = False
+            for line in output.split("\n"):
+                # Convert ===STEP N=== markers to comments
+                if line.startswith("===STEP ") and line.endswith("==="):
+                    step_num = line[8:-3].strip()
+                    cleaned.append(f"# --- step {step_num} ---")
+                    continue
+                # Legacy ===CMD: markers
+                if line.startswith("===CMD:") and line.endswith("==="):
+                    continue
+                # STDERR section header
+                if line.strip() == "--- STDERR ---":
+                    in_stderr = True
+                    continue
+                # Skip noisy STDERR lines
+                if in_stderr:
+                    # Skip SSM script path errors, curl progress bars, empty lines
+                    if ("/awsrunShellScript/" in line or
+                            line.strip().startswith("% Total") or
+                            line.strip().startswith("Dload") or
+                            "command not found" in line or
+                            line.strip() == ""):
+                        continue
+                    # Keep meaningful errors
+                    cleaned.append(f"# WARN: {line.strip()}")
+                    continue
+                # Skip curl progress bars in stdout
+                if line.strip().startswith("% Total") or line.strip().startswith("Dload"):
+                    continue
+                cleaned.append(line)
             lines.append(f"**{inst_name}:**")
-            lines.append(f"```\n{output[:3000]}\n```")
+            lines.append(f"```\n{chr(10).join(cleaned)[:3000].strip()}\n```")
             lines.append("")
 
-    # Upgrade steps (manual)
+    # Readiness analysis (Claude-generated per-node assessment)
+    if readiness_analysis:
+        lines.append("## 🔍 Upgrade Readiness Assessment")
+        lines.append(readiness_analysis)
+        lines.append("")
+
+    # Upgrade steps (manual) — single code block
     upgrade_steps = plan.get("upgrade_steps", [])
     if upgrade_steps:
         lines.append("## ⚠️ Upgrade Steps (Manual)")
         lines.append("> **These steps must be performed manually by a human engineer.**")
         lines.append("")
+        code_lines = []
         for s in upgrade_steps:
-            lines.append(f"### Step {s.get('step', '')}: {s.get('description', '')}")
+            code_lines.append(f"# Step {s.get('step', '')}: {s.get('description', '')}")
             if s.get("command"):
-                lines.append(f"```bash\n{s['command']}\n```")
-            lines.append("")
+                code_lines.append(s["command"])
+            code_lines.append("")
+        lines.append(f"```bash\n{chr(10).join(code_lines).strip()}\n```")
+        lines.append("")
 
-    # Post-upgrade verification
+    # Post-upgrade verification — single code block
     post_steps = plan.get("post_upgrade_steps", [])
     if post_steps:
         lines.append("## Post-Upgrade Verification (Pending)")
+        code_lines = []
         for s in post_steps:
-            lines.append(f"### Step {s.get('step', '')}: {s.get('description', '')}")
+            code_lines.append(f"# Step {s.get('step', '')}: {s.get('description', '')}")
             if s.get("command"):
-                lines.append(f"```bash\n{s['command']}\n```")
-            lines.append("")
+                code_lines.append(s["command"])
+            code_lines.append("")
+        lines.append(f"```bash\n{chr(10).join(code_lines).strip()}\n```")
+        lines.append("")
 
     # Rollback
     rollback = plan.get("rollback_steps", [])
@@ -1007,20 +1103,86 @@ def _push_to_github(github_token, chain, filename, content, commit_message):
         return None
 
 
+def _analyze_pre_upgrade_results(api_key, chain, current_ver, latest_ver, plan, pre_results):
+    """Call Claude to analyze pre-upgrade SSM results and assess each node's readiness."""
+    results_text = ""
+    for r in pre_results:
+        results_text += f"\n### {r.get('instance_name', 'unknown')}:\n{r.get('output', '(no output)')[:2000]}\n"
+
+    breaking = plan.get("breaking_changes", [])
+    breaking_text = "\n".join(f"- {c}" for c in breaking) if breaking else "None"
+
+    prompt = (
+        f"You are analyzing pre-upgrade check results for {chain} nodes upgrading from {current_ver} to {latest_ver}.\n\n"
+        f"Breaking changes:\n{breaking_text}\n\n"
+        f"Pre-upgrade execution results:\n{results_text}\n\n"
+        "For EACH node, provide:\n"
+        "1. **Status**: ✅ Ready / ⚠️ Ready with caution / ❌ Not ready\n"
+        "2. **Key findings**: What the checks revealed (1-2 sentences)\n"
+        "3. **Action items**: Any issues that must be fixed before upgrading (if any)\n\n"
+        "Be concise. Use markdown formatting. Focus on blocking issues vs warnings."
+    )
+
+    try:
+        result = _call_claude(api_key, "You are a DevOps engineer analyzing pre-upgrade readiness.", prompt)
+        return result
+    except Exception as e:
+        logger.warning("Readiness analysis Claude call failed: %s", e)
+        return ""
+
+
 # =============================================================================
 # SSM Command Execution
 # =============================================================================
 
-def run_ssm_diagnostics(instance_id, commands, timeout=60):
-    """Execute commands on an instance via SSM. Returns combined output string."""
-    region = os.environ.get("SSM_REGION", "us-east-1")
+_instance_region_cache = {}
 
-    # Rebuild client with correct region (region may differ per instance)
+
+def _discover_instance_region(instance_id):
+    """Find which AWS region an SSM-managed instance is in by querying all regions."""
+    if instance_id in _instance_region_cache:
+        return _instance_region_cache[instance_id]
+
+    regions = ["us-east-1", "us-west-2", "us-west-1", "us-east-2", "eu-west-1"]
+    for region in regions:
+        try:
+            ssm = boto3.client("ssm", region_name=region)
+            resp = ssm.describe_instance_information(
+                Filters=[{"Key": "InstanceIds", "Values": [instance_id]}],
+            )
+            if resp.get("InstanceInformationList"):
+                logger.info("Discovered instance %s in region %s", instance_id, region)
+                _instance_region_cache[instance_id] = region
+                return region
+        except Exception:
+            continue
+
+    # Fallback: try EC2 describe (works for i-xxx, not mi-xxx)
+    if instance_id.startswith("i-"):
+        for region in regions:
+            try:
+                ec2 = boto3.client("ec2", region_name=region)
+                resp = ec2.describe_instances(InstanceIds=[instance_id])
+                if resp.get("Reservations"):
+                    logger.info("Discovered instance %s in region %s (via EC2)", instance_id, region)
+                    _instance_region_cache[instance_id] = region
+                    return region
+            except Exception:
+                continue
+
+    logger.warning("Could not discover region for instance %s", instance_id)
+    return ""
+
+
+def run_ssm_diagnostics(instance_id, commands, timeout=60, region=None):
+    """Execute commands on an instance via SSM. Returns combined output string."""
+    region = region or os.environ.get("SSM_REGION", "us-east-1")
+
     ssm = boto3.client("ssm", region_name=region)
 
     script_lines = ["#!/bin/bash", "set +e"]
-    for cmd in commands:
-        script_lines.append(f'echo "===CMD: {cmd}==="')
+    for idx, cmd in enumerate(commands, 1):
+        script_lines.append(f"echo '===STEP {idx}==='")
         script_lines.append(cmd)
         script_lines.append("")
     script = "\n".join(script_lines)
@@ -1086,9 +1248,13 @@ def _run_pre_upgrade_on_instances(instances, commands):
             results.append({"instance_name": inst_name, "output": "(no instance_id, skipped)"})
             continue
 
-        logger.info("Running SSM commands on %s (%s)", inst_name, inst_id)
+        inst_region = inst.get("region", "")
+        if not inst_region and inst_id:
+            inst_region = _discover_instance_region(inst_id)
+        inst_region = inst_region or os.environ.get("SSM_REGION", "us-east-1")
+        logger.info("Running SSM commands on %s (%s) in %s", inst_name, inst_id, inst_region)
         try:
-            output = run_ssm_diagnostics(inst_id, commands, timeout=120)
+            output = run_ssm_diagnostics(inst_id, commands, timeout=120, region=inst_region)
         except Exception as e:
             output = f"(SSM error: {e})"
             logger.error("SSM failed for %s: %s", inst_name, e)
@@ -1506,7 +1672,9 @@ def _handle_upgrade_plan(event):
     repos = _get_repos_for_chain(chain, alertname)
     release_notes_parts = []
     for repo in repos:
-        notes = _fetch_releases(repo, count=15, since_version=current_ver)
+        # Extract the repo-specific version from compound strings like "Besu 26.2.0 / Teku 26.3.0"
+        repo_current_ver = _extract_version_tag(repo, current_ver)
+        notes = _fetch_releases(repo, count=15, since_version=repo_current_ver)
         if notes:
             release_notes_parts.append(f"## {repo}\n\n{notes}")
 
@@ -1544,6 +1712,19 @@ def _handle_upgrade_plan(event):
     else:
         pre_results = []
 
+    # ── Phase 4a-2: Analyze pre-upgrade results per node ────────────────────
+    readiness_analysis = ""
+    if pre_results:
+        try:
+            api_key = _get_anthropic_api_key()
+            if api_key:
+                readiness_analysis = _analyze_pre_upgrade_results(
+                    api_key, chain, current_ver, latest_ver, plan, pre_results
+                )
+                logger.info("Readiness analysis generated (%d chars)", len(readiness_analysis))
+        except Exception:
+            logger.exception("Readiness analysis failed")
+
     # ── Phase 4b: Push upgrade plan to GitHub ────────────────────────────────
     page_url = None
     page_id = None
@@ -1551,7 +1732,8 @@ def _handle_upgrade_plan(event):
 
     if github_token:
         md_content = _build_upgrade_plan_markdown(
-            plan, pre_results, instances, chain, current_ver, latest_ver, alertname
+            plan, pre_results, instances, chain, current_ver, latest_ver, alertname,
+            readiness_analysis=readiness_analysis,
         )
         # Filename: sanitize version strings for filesystem
         safe_ver = f"{current_ver}_to_{latest_ver}".replace(" ", "-").replace("/", "-")

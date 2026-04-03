@@ -374,7 +374,9 @@ def build_adaptive_card_content(alert_data, unique_alerts):
                             "labels": labels,
                             "instances": [],
                         }
-                    upgrade_groups[key]["instances"].append({"name": instance, "id": instance_id})
+                    inst_info = _resolve_instance_info(instance)
+                    inst_region = inst_info.get("region", "") if isinstance(inst_info, dict) else ""
+                    upgrade_groups[key]["instances"].append({"name": instance, "id": instance_id, "region": inst_region})
 
                 body.append({
                     "type": "ColumnSet",
@@ -476,11 +478,11 @@ def _wrap_adaptive_card(card_content):
 # RCA Trigger
 # =============================================================================
 
-def _resolve_instance_id(instance_name):
-    """Resolve an instance name to SSM instance ID.
+def _resolve_instance_info(instance_name):
+    """Resolve an instance name to SSM instance ID and region.
 
-    Checks the alert labels first, then falls back to querying SSM
-    describe-instance-information to match by ComputerName or Name tag.
+    Queries SSM describe-instance-information across all configured regions.
+    Returns {"id": "i-xxx", "region": "us-east-1"} or {"id": "", "region": ""}.
     Results are cached for the Lambda lifetime.
     """
     global _instance_id_cache
@@ -500,22 +502,29 @@ def _resolve_instance_id(instance_name):
                         inst_id = inst.get("InstanceId", "")
                         computer = inst.get("ComputerName", "")
                         name = inst.get("Name", "")
+                        entry = {"id": inst_id, "region": region.strip()}
                         # Map by ComputerName (hostname)
                         if computer:
-                            _instance_id_cache[computer] = inst_id
+                            _instance_id_cache[computer] = entry
                             # Also map short name (e.g., "creator-5.theblueprint.xyz" -> "creator-5")
                             short = computer.split(".")[0]
                             if short != computer:
-                                _instance_id_cache[short] = inst_id
+                                _instance_id_cache[short] = entry
                         # Map by Name tag (activation name)
                         if name:
-                            _instance_id_cache[name] = inst_id
+                            _instance_id_cache[name] = entry
             except Exception:
                 logger.exception("Failed to query SSM in region %s", region)
         logger.info("SSM instance cache built: %d entries across %d regions",
                     len(_instance_id_cache), len(ssm_regions))
 
-    return _instance_id_cache.get(instance_name, "")
+    return _instance_id_cache.get(instance_name, {"id": "", "region": ""})
+
+
+def _resolve_instance_id(instance_name):
+    """Backward-compatible wrapper: returns just the instance ID string."""
+    return _resolve_instance_info(instance_name).get("id", "") if isinstance(
+        _resolve_instance_info(instance_name), dict) else _resolve_instance_info(instance_name)
 
 
 def trigger_rca(alert_data, unique_alerts, parent_message_id):

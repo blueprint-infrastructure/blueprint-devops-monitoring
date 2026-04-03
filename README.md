@@ -58,7 +58,7 @@ monitoring/
 │   │   └── handler.py
 │   ├── bot-endpoint/        # Bot messaging endpoint (handles button clicks)
 │   │   └── handler.py
-│   ├── upgrade-analyzer/    # Version upgrade plan generator (Claude + Notion + SSM)
+│   ├── upgrade-analyzer/    # Version upgrade plan generator (Claude + GitHub + SSM)
 │   │   └── handler.py
 │   └── docs-fetcher/        # Chain knowledge fetcher (GitHub + docs → S3 + Notion)
 │       └── handler.py
@@ -74,6 +74,7 @@ monitoring/
     ├── deploy-notifications-amg.sh # Deploy contact points and policies
     ├── deploy-sns-lambda.sh        # Deploy SNS topics + teams-notifier Lambda
     ├── deploy-rca-lambda.sh        # Deploy RCA analyzer Lambda
+    ├── setup-vpc-lambda.sh         # Migrate Lambdas to VPC with NAT Gateway
     └── env.example          # Environment variable template
 ```
 
@@ -110,7 +111,7 @@ monitoring/
 
 **Solana** (alerting/chain/solana.yaml) — 9 rules covering node health, sync status (slots behind), peer connectivity, validator delinquency, and version drift.
 
-**Avalanche** (alerting/chain/avalanche.yaml) — 10 rules covering node health, C-Chain bootstrapping/sync, peer connectivity, rewarding stake percentage, and version drift.
+**Avalanche** (alerting/chain/avalanche.yaml) — 11 rules covering node health, C-Chain bootstrapping/sync, peer connectivity, rewarding stake percentage, high-stake peer drop detection, and version drift.
 
 **Algorand** (alerting/chain/algorand.yaml) — 7 rules covering node health/readiness, sync status (rounds behind), peer connectivity, and version drift.
 
@@ -247,21 +248,19 @@ User clicks "🔍 Analyze" → bot-endpoint → rca-analyzer Lambda (async)
     └→ Bot Framework: reply-in-thread with diagnosis card
 
 User clicks "📋 {Chain} Upgrade Plan" → bot-endpoint → upgrade-analyzer Lambda (async)
-    ├→ GitHub: fetch release notes for version range
+    ├→ GitHub: fetch release notes for version range (both repos for Ethereum)
     ├→ validator-context: fetch internal upgrade guide + scripts
     ├→ Claude API: generate structured JSON upgrade plan
-    ├→ SSM: auto-run pre-upgrade steps on each affected instance
-    ├→ Notion: create/update upgrade plan page (one page per chain+version)
-    │    ├── Pre-Upgrade Steps + SSM execution results
-    │    ├── Upgrade Steps (list only — human engineer must execute)
-    │    └── Post-Upgrade Verification (pending)
+    ├→ SSM: auto-run pre-upgrade steps on each affected instance (multi-region)
+    ├→ Claude API: analyze pre-upgrade results → per-node readiness assessment
+    ├→ GitHub: push upgrade plan as Markdown to validator-context repo
+    │    └── {chain}/upgrade_plan/{version}.md
     └→ Bot Framework: reply-in-thread with short card
-         ├── "📄 View Upgrade Plan" → Notion link
+         ├── "📄 View Upgrade Plan" → GitHub link
          └── "✅ Run Post-Upgrade Verification" button
 
 Engineer completes manual upgrade, clicks verify button → bot-endpoint → upgrade-analyzer (async)
     ├→ SSM: run post-upgrade verification on each instance
-    ├→ Notion: append verification results to upgrade page
     └→ Bot Framework: reply-in-thread with verification summary
 ```
 
@@ -274,8 +273,10 @@ Each RCA reply (in the alert message's thread) includes:
 
 ### Upgrade Plan Output
 
-Each upgrade plan is written to a Notion page (under the chain's parent page) with:
-- **Pre-Upgrade Steps** — auto-executed via SSM, results captured in Notion
+Each upgrade plan is pushed as Markdown to the [`validator-context`](https://github.com/blueprint-infrastructure/validator-context) repo under `{chain}/upgrade_plan/`:
+- **Release Notes** — links to GitHub releases for all relevant repos (e.g., both Besu + Teku for Ethereum)
+- **Pre-Upgrade Steps** — auto-executed via SSM on each instance (multi-region), results captured
+- **Upgrade Readiness Assessment** — Claude analyzes SSM results per-node (✅ Ready / ⚠️ Caution / ❌ Not ready)
 - **Upgrade Steps** — listed with shell commands; must be run manually by an engineer
 - **Post-Upgrade Verification** — triggered via Teams button after manual steps complete
 - **Rollback Steps** — recovery procedure if the upgrade fails
@@ -287,7 +288,7 @@ RCA prompts include per-chain architecture, diagnostic commands, failure modes, 
 - **Ethereum** — Besu (execution) + Teku (consensus), dual-layer sync, attestations
 - **Avalanche** — AvalancheGo, P/X/C-Chain bootstrap, rewarding stake (80% threshold)
 - **Algorand** — algod, participation key expiry, round sync
-- **Audius** — Docker-based (my-node), watchtower auto-updates, CPU 100% is normal
+- **Audius** — Docker-based (`docker run`, not compose), openaudio/go-openaudio image, CPU 100% is normal
 
 Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetcher` Lambda, stored in S3 and [Notion](https://www.notion.so/32f09a37-0ee0-8154-9efd-cb49c3acd4dc).
 
@@ -298,7 +299,7 @@ Dynamic knowledge is fetched from GitHub releases + official docs via `docs-fetc
 | Chain | Repos |
 |---|---|
 | Solana | `anza-xyz/agave`, `firedancer-io/firedancer` |
-| Ethereum | `hyperledger/besu`, `Consensys/teku` |
+| Ethereum | `besu-eth/besu`, `Consensys/teku` |
 | Avalanche | `ava-labs/avalanchego` |
 | Algorand | `algorand/go-algorand` |
 | Audius | `AudiusProject/audius-protocol`, `OpenAudio/go-openaudio` |
@@ -341,7 +342,7 @@ pip install pytest
 python3 -m pytest tests/ -v
 ```
 
-Tests cover button grouping logic, payload routing, Notion block structure, card builders, SSM delegation, and Notion search/create helpers — all without requiring AWS credentials.
+Tests cover button grouping logic, payload routing, card builders, SSM delegation, and GitHub push helpers — all without requiring AWS credentials.
 
 ### Environment Variables
 
@@ -350,8 +351,9 @@ Tests cover button grouping logic, payload routing, Notion block structure, card
 | `ANTHROPIC_SECRET_ARN` | Yes | Secrets Manager ARN for Anthropic API key (also contains `github_token`) |
 | `AMP_WORKSPACE_ID` | Yes | Amazon Managed Prometheus workspace ID |
 | `TEAMS_BOT_SECRET_ARN` | Yes | Secrets Manager ARN for Azure Bot credentials |
-| `NOTION_SECRET_ARN` | Recommended | Secrets Manager ARN for Notion API token (upgrade plan pages) |
-| `SSM_REGION` | Auto | AWS region for SSM commands (set by deploy script) |
+| `GITHUB_SECRET_ARN` | Recommended | Secrets Manager ARN for GitHub token (push upgrade plans to validator-context) |
+| `NOTION_SECRET_ARN` | Optional | Secrets Manager ARN for Notion API token (legacy, replaced by GitHub push) |
+| `SSM_REGION` | Auto | Default AWS region for SSM commands (auto-discovers per instance) |
 | `RCA_LAMBDA_FUNCTION_NAME` | Auto | Set automatically by deploy script |
 
 ### Lambda Architecture
@@ -361,7 +363,7 @@ Tests cover button grouping logic, payload routing, Notion block structure, card
 | **teams-notifier** | 128MB | 60s | Posts alert cards via Bot Framework, sends email |
 | **bot-endpoint** | 128MB | 30s | Handles Action.Submit button clicks from Teams |
 | **rca-analyzer** | 256MB | 180s | SSM diagnostics + Claude analysis + thread reply |
-| **upgrade-analyzer** | 256MB | 300s | GitHub releases + Claude plan + SSM pre-upgrade + Notion + Teams reply |
+| **upgrade-analyzer** | 256MB | 300s | Release notes + Claude plan + SSM pre-upgrade + readiness analysis + GitHub push + Teams reply |
 | **docs-fetcher** | 256MB | 300s | Fetches chain docs → S3 + Notion (weekly) |
 
 ## Conventions

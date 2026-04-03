@@ -146,7 +146,7 @@ RCA_POLICY=$(jq -n \
         {
             Sid: "SSMCommands",
             Effect: "Allow",
-            Action: ["ssm:SendCommand", "ssm:GetCommandInvocation"],
+            Action: ["ssm:SendCommand", "ssm:GetCommandInvocation", "ssm:DescribeInstanceInformation"],
             Resource: [
                 "arn:aws:ssm:*:*:document/AWS-RunShellScript",
                 "arn:aws:ec2:*:*:instance/*",
