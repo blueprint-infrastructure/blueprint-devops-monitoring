@@ -99,8 +99,15 @@ CHAIN_UPGRADE_CONTEXT = {
         "IMPORTANT: Default user is ubuntu, NOT root. SSM runs as root, so use absolute paths. "
         "Config dir: /home/ubuntu/.avalanchego/ (NOT ~/.avalanchego — that resolves to /root which is wrong). "
         "Binary: /usr/local/bin/avalanchego. "
-        "Restart: sudo systemctl restart avalanchego. "
-        "Verify: /usr/local/bin/avalanchego --version && curl -s -X POST --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}' -H 'content-type:application/json;' http://127.0.0.1:9650/ext/info"
+        "Upgrade method: Use the official AvalancheGo installer script from Avalanche docs. "
+        "  Upgrade command (run as ubuntu): cd /home/ubuntu && wget -q https://raw.githubusercontent.com/AshAvalanche/avalanche-docs/master/scripts/avalanchego-installer.sh && chmod +x avalanchego-installer.sh && ./avalanchego-installer.sh --version <TARGET_VERSION>. "
+        "  The installer automatically: downloads the binary, stops the service, replaces the binary, restarts the service. "
+        "  Do NOT manually stop/start the service or download binaries — let the installer handle it. "
+        "Pre-upgrade checks: /usr/local/bin/avalanchego --version; systemctl is-active avalanchego; "
+        "  curl -s -X POST --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}' -H 'content-type:application/json;' http://127.0.0.1:9650/ext/info; "
+        "  df -h /home/ubuntu/.avalanchego. "
+        "Post-upgrade verify: /usr/local/bin/avalanchego --version; systemctl is-active avalanchego; "
+        "  curl -s -X POST --data '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.isBootstrapped\",\"params\":{\"chain\":\"X\"}}' -H 'content-type:application/json;' http://127.0.0.1:9650/ext/info."
     ),
     "solana": (
         "Service: sol (systemctl) or agave-validator. "
