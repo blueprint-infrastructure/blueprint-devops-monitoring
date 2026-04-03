@@ -1004,7 +1004,7 @@ def _build_upgrade_plan_markdown(plan, pre_results, instances, chain, current_ve
                     continue
                 cleaned.append(line)
             lines.append(f"**{inst_name}:**")
-            lines.append(f"```\n{chr(10).join(cleaned)[:3000].strip()}\n```")
+            lines.append(f"```\n{chr(10).join(cleaned)[:8000].strip()}\n```")
             lines.append("")
 
     # Readiness analysis (Claude-generated per-node assessment)
@@ -1193,7 +1193,9 @@ def run_ssm_diagnostics(instance_id, commands, timeout=60, region=None):
     script_lines = ["#!/bin/bash", "set +e"]
     for idx, cmd in enumerate(commands, 1):
         script_lines.append(f"echo '===STEP {idx}==='")
-        script_lines.append(cmd)
+        # Pipe each command through head to cap output per step (avoid one verbose
+        # command like 'systemctl status' consuming the entire output budget)
+        script_lines.append(f"{{ {cmd} ; }} 2>&1 | head -30")
         script_lines.append("")
     script = "\n".join(script_lines)
 
