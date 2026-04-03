@@ -799,7 +799,8 @@ def _extract_version_tag(repo, version_str):
     Examples:
       repo="besu-eth/besu",   version="Besu 26.2.0 / Teku 26.4.0"  → "26.2.0"
       repo="Consensys/teku",  version="Besu 26.2.0 / Teku 26.4.0"  → "26.4.0"
-      repo="ava-labs/avalanchego", version="AvalancheGo 1.14.2"     → "AvalancheGo 1.14.2"
+      repo="ava-labs/avalanchego", version="AvalancheGo 1.14.2"     → "v1.14.2"
+      repo="anza-xyz/agave",      version="Agave 2.2.6"             → "v2.2.6"
     """
     import re
     repo_lower = repo.lower()
@@ -809,12 +810,10 @@ def _extract_version_tag(repo, version_str):
     if "/" in ver:
         parts = [p.strip() for p in ver.split("/")]
         for part in parts:
-            # Match repo name to version part
             if "besu" in repo_lower and part.lower().startswith("besu"):
                 return re.sub(r'^[A-Za-z]+\s*', '', part).strip()
             if "teku" in repo_lower and part.lower().startswith("teku"):
                 return re.sub(r'^[A-Za-z]+\s*', '', part).strip()
-        # No match — return first part stripped of prefix
         return re.sub(r'^[A-Za-z]+\s*', '', parts[0]).strip()
 
     # Single version: "Besu 26.2.0" → "26.2.0" for besu-eth/besu
@@ -822,6 +821,12 @@ def _extract_version_tag(repo, version_str):
         return re.sub(r'^[A-Za-z]+\s*', '', ver).strip()
     if "teku" in repo_lower and ver.lower().startswith("teku"):
         return re.sub(r'^[A-Za-z]+\s*', '', ver).strip()
+
+    # Repos that use v-prefixed tags: avalanchego, agave, go-algorand, etc.
+    # "AvalancheGo 1.14.2" → "v1.14.2", "go-algorand 4.0.0" → "v4.0.0"
+    version_num = re.sub(r'^[A-Za-z][A-Za-z0-9_-]*\s*', '', ver).strip()
+    if version_num and version_num[0].isdigit():
+        return f"v{version_num}"
 
     return ver
 
