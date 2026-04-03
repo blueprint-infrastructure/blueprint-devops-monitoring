@@ -116,11 +116,19 @@ CHAIN_UPGRADE_CONTEXT = {
         "Note: catchpoint fast-sync may be needed after major version jumps."
     ),
     "ethereum": (
-        "Services: besu (execution layer) + teku (consensus layer). "
+        "Deployed via Stereum — both Besu (execution layer) and Teku (consensus layer) run as Docker containers. "
+        "IMPORTANT: Do NOT look for systemctl services or bare binaries. Use docker commands. "
+        "Container names follow the pattern: stereum-<uuid>. "
+        "Find containers: docker ps --format '{{.Names}} {{.Image}} {{.Status}}' | grep -iE 'besu|teku'. "
+        "Besu image: hyperledger/besu:<version>. Teku image: consensys/teku:<version>. "
         "Rolling upgrade order: upgrade teku first, then besu. "
-        "Besu restart: systemctl restart besu. "
-        "Teku restart: systemctl restart teku. "
-        "Verify: curl -s http://localhost:5051/eth/v1/node/syncing; curl -s http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_syncing\",\"params\":[],\"id\":1}'"
+        "Pre-upgrade checks should use docker exec: "
+        "  docker exec $(docker ps -q -f ancestor=hyperledger/besu) besu --version; "
+        "  docker exec $(docker ps -q -f ancestor=consensys/teku --latest) /opt/teku/bin/teku --version; "
+        "  curl -s http://localhost:5051/eth/v1/node/syncing; "
+        "  curl -s http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_syncing\",\"params\":[],\"id\":1}'. "
+        "Upgrade: update the image tag in Stereum config, then docker compose pull && docker compose up -d, or docker stop + docker rm + docker run with new image tag. "
+        "Default user is ubuntu, SSM runs as root — use absolute paths."
     ),
     "audius": (
         "Deployed via direct 'docker run' (NOT docker-compose). "
@@ -436,6 +444,8 @@ Rules:
 - SSM runs as root, but the default user on nodes is ubuntu. Use absolute paths like /home/ubuntu/.avalanchego/ instead of ~ or $HOME which resolve to /root.
 - For docker-compose based services, always locate the compose file before running compose commands.
 - NEVER include private keys, secrets, or sensitive credentials in commands, output, or documentation. Redact them as '***'.
+- pre_upgrade_steps are auto-executed via SSM. They must ONLY contain read-only diagnostic checks (version, config, disk space, health). NEVER include downloads, installs, backups, or any write operations in pre_upgrade_steps — those belong in upgrade_steps.
+- upgrade_steps are manual. Downloads, binary replacement, service restarts, and backups go here.
 """
 
 
@@ -1204,7 +1214,7 @@ def run_ssm_diagnostics(instance_id, commands, timeout=60, region=None):
         return error_msg
 
     time.sleep(2)
-    max_attempts = 15
+    max_attempts = 30
     for attempt in range(max_attempts):
         try:
             result = ssm.get_command_invocation(
@@ -1716,7 +1726,7 @@ def _handle_upgrade_plan(event):
     readiness_analysis = ""
     if pre_results:
         try:
-            api_key = _get_anthropic_api_key()
+            api_key = _get_anthropic_key()
             if api_key:
                 readiness_analysis = _analyze_pre_upgrade_results(
                     api_key, chain, current_ver, latest_ver, plan, pre_results
